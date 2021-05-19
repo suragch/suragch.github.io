@@ -1,40 +1,196 @@
 'use strict';
+const MANIFEST = 'flutter-app-manifest';
+const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 const RESOURCES = {
-  "index.html": "2417239720a23b9165f0b7c099806999",
-"/": "2417239720a23b9165f0b7c099806999",
-"main.dart.js": "8e9517c0032ce2faf74ac3c9aecf6d92",
+  "version.json": "ef70f77fb5f9b61cd66d1f735140e05e",
+"index.html": "5d365321aff47e07b4459ecc0bd0ccb0",
+"/": "5d365321aff47e07b4459ecc0bd0ccb0",
+"main.dart.js": "6050830e58414696cb10b6f026dac996",
 "favicon.png": "49f6d4532ebdeb1ab7d52f8197c754b1",
 "icons/Icon-192.png": "ac9a721a12bbc803b44f645561ecb1e1",
 "icons/Icon-512.png": "96e752610906ba2a93c65f8abe1645f1",
 "manifest.json": "90e3ba50c4fc35dfdf58dbb2b1e853c0",
 "assets/LICENSE": "e5f8949cd2db314ce7ce320da0fa6538",
-"assets/AssetManifest.json": "a43271d6f84156d545861b24d05c963a",
-"assets/FontManifest.json": "580ff1a5d08679ded8fcf5c6848cece7",
+"assets/AssetManifest.json": "e64ec4a3ade98d61b8626fe018ecbc32",
+"assets/NOTICES": "d408711e07b7a1acf3c8434b1c115f3b",
+"assets/FontManifest.json": "7b2a36307916a9721811788013e65289",
 "assets/fonts/MaterialIcons-Regular.ttf": "56d3ffdef7a25659eab6a68a3fbfaf16",
-"assets/assets/logo.jpg": "72d8e4a91a21994c6f60df72f671aaa3"
+"assets/fonts/MaterialIcons-Regular.otf": "1288c9e28052e028aba623321f7826ac",
+"assets/assets/github.png": "cefc20232703e5e3c24efd5f50d75e26",
+"assets/assets/medium.png": "3d7e11c4cc5255ef891b9471098c4725",
+"assets/assets/logo.jpg": "72d8e4a91a21994c6f60df72f671aaa3",
+"assets/assets/twitter.png": "7571ea13179d06d922f912f64d14abc6",
+"assets/assets/stackoverflow.png": "ebafaa8fbad9eac21ede95e111fda447"
 };
 
-self.addEventListener('activate', function (event) {
-  event.waitUntil(
-    caches.keys().then(function (cacheName) {
-      return caches.delete(cacheName);
-    }).then(function (_) {
-      return caches.open(CACHE_NAME);
-    }).then(function (cache) {
-      return cache.addAll(Object.keys(RESOURCES));
+// The application shell files that are downloaded before a service worker can
+// start.
+const CORE = [
+  "/",
+"main.dart.js",
+"index.html",
+"assets/NOTICES",
+"assets/AssetManifest.json",
+"assets/FontManifest.json"];
+// During install, the TEMP cache is populated with the application shell files.
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+  return event.waitUntil(
+    caches.open(TEMP).then((cache) => {
+      return cache.addAll(
+        CORE.map((value) => new Request(value + '?revision=' + RESOURCES[value], {'cache': 'reload'})));
     })
   );
 });
 
-self.addEventListener('fetch', function (event) {
-  event.respondWith(
-    caches.match(event.request)
-      .then(function (response) {
-        if (response) {
-          return response;
+// During activate, the cache is populated with the temp files downloaded in
+// install. If this service worker is upgrading from one with a saved
+// MANIFEST, then use this to retain unchanged resource files.
+self.addEventListener("activate", function(event) {
+  return event.waitUntil(async function() {
+    try {
+      var contentCache = await caches.open(CACHE_NAME);
+      var tempCache = await caches.open(TEMP);
+      var manifestCache = await caches.open(MANIFEST);
+      var manifest = await manifestCache.match('manifest');
+      // When there is no prior manifest, clear the entire cache.
+      if (!manifest) {
+        await caches.delete(CACHE_NAME);
+        contentCache = await caches.open(CACHE_NAME);
+        for (var request of await tempCache.keys()) {
+          var response = await tempCache.match(request);
+          await contentCache.put(request, response);
         }
-        return fetch(event.request);
+        await caches.delete(TEMP);
+        // Save the manifest to make future upgrades efficient.
+        await manifestCache.put('manifest', new Response(JSON.stringify(RESOURCES)));
+        return;
+      }
+      var oldManifest = await manifest.json();
+      var origin = self.location.origin;
+      for (var request of await contentCache.keys()) {
+        var key = request.url.substring(origin.length + 1);
+        if (key == "") {
+          key = "/";
+        }
+        // If a resource from the old manifest is not in the new cache, or if
+        // the MD5 sum has changed, delete it. Otherwise the resource is left
+        // in the cache and can be reused by the new service worker.
+        if (!RESOURCES[key] || RESOURCES[key] != oldManifest[key]) {
+          await contentCache.delete(request);
+        }
+      }
+      // Populate the cache with the app shell TEMP files, potentially overwriting
+      // cache files preserved above.
+      for (var request of await tempCache.keys()) {
+        var response = await tempCache.match(request);
+        await contentCache.put(request, response);
+      }
+      await caches.delete(TEMP);
+      // Save the manifest to make future upgrades efficient.
+      await manifestCache.put('manifest', new Response(JSON.stringify(RESOURCES)));
+      return;
+    } catch (err) {
+      // On an unhandled exception the state of the cache cannot be guaranteed.
+      console.error('Failed to upgrade service worker: ' + err);
+      await caches.delete(CACHE_NAME);
+      await caches.delete(TEMP);
+      await caches.delete(MANIFEST);
+    }
+  }());
+});
+
+// The fetch handler redirects requests for RESOURCE files to the service
+// worker cache.
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  var origin = self.location.origin;
+  var key = event.request.url.substring(origin.length + 1);
+  // Redirect URLs to the index.html
+  if (key.indexOf('?v=') != -1) {
+    key = key.split('?v=')[0];
+  }
+  if (event.request.url == origin || event.request.url.startsWith(origin + '/#') || key == '') {
+    key = '/';
+  }
+  // If the URL is not the RESOURCE list then return to signal that the
+  // browser should take over.
+  if (!RESOURCES[key]) {
+    return;
+  }
+  // If the URL is the index.html, perform an online-first request.
+  if (key == '/') {
+    return onlineFirst(event);
+  }
+  event.respondWith(caches.open(CACHE_NAME)
+    .then((cache) =>  {
+      return cache.match(event.request).then((response) => {
+        // Either respond with the cached resource, or perform a fetch and
+        // lazily populate the cache.
+        return response || fetch(event.request).then((response) => {
+          cache.put(event.request, response.clone());
+          return response;
+        });
       })
+    })
   );
 });
+
+self.addEventListener('message', (event) => {
+  // SkipWaiting can be used to immediately activate a waiting service worker.
+  // This will also require a page refresh triggered by the main worker.
+  if (event.data === 'skipWaiting') {
+    self.skipWaiting();
+    return;
+  }
+  if (event.data === 'downloadOffline') {
+    downloadOffline();
+    return;
+  }
+});
+
+// Download offline will check the RESOURCES for all files not in the cache
+// and populate them.
+async function downloadOffline() {
+  var resources = [];
+  var contentCache = await caches.open(CACHE_NAME);
+  var currentContent = {};
+  for (var request of await contentCache.keys()) {
+    var key = request.url.substring(origin.length + 1);
+    if (key == "") {
+      key = "/";
+    }
+    currentContent[key] = true;
+  }
+  for (var resourceKey of Object.keys(RESOURCES)) {
+    if (!currentContent[resourceKey]) {
+      resources.push(resourceKey);
+    }
+  }
+  return contentCache.addAll(resources);
+}
+
+// Attempt to download the resource online before falling back to
+// the offline cache.
+function onlineFirst(event) {
+  return event.respondWith(
+    fetch(event.request).then((response) => {
+      return caches.open(CACHE_NAME).then((cache) => {
+        cache.put(event.request, response.clone());
+        return response;
+      });
+    }).catch((error) => {
+      return caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((response) => {
+          if (response != null) {
+            return response;
+          }
+          throw error;
+        });
+      });
+    })
+  );
+}

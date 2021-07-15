@@ -57039,13 +57039,13 @@ $S:22}
 F.Bx.prototype={
 S:function(a,b){return new S.rR(new F.By(null),"Suragch.dev",X.acp(null,C.jR,C.j),null)}}
 F.By.prototype={
-S:function(a,b){var s=null,r="Mongol Editor",q=t.R,p=B.abc(H.a([Q.a70(new F.Ta(),L.Eq("Mongol Code Converter",s,s,s,s)),Q.a70(new F.Tb(),L.Eq(r,s,s,s,s)),Q.a70(new F.Tc(),L.Eq(r,s,s,s,s))],q)),o=T.fo(s,100,s),n=T.fo(U.AM("assets/logo.jpg"),200,200),m=T.fo(s,50,s),l=T.yP(L.Eq("Suragch",s,A.v0(s,s,s,s,s,s,s,s,s,s,s,40,s,s,s,s,!0,s,s,s,s,s,s,s),s,s),s,s)
-return new M.u4(new E.q5(0,C.aM,new T.e_(C.m,s,s),new P.P(1/0,56),s),B.abc(H.a([o,n,m,l,T.yP(new O.uj("suragch@suragch.dev",C.Cq,s),s,s),T.am3(H.a([new F.AD(s),T.fo(s,s,20),new F.EP(s),T.fo(s,s,20),new F.Bq(s),T.fo(s,s,20),new F.Eb(s)],q),C.iA,C.jJ,C.jK)],q)),new Z.A1(p,s),s)}}
+S:function(a,b){var s=null,r=t.R,q=B.abc(H.a([Q.a70(new F.Ta(),L.Eq("Mongol Code Converter",s,s,s,s)),Q.a70(new F.Tb(),L.Eq("Mongol Editor",s,s,s,s)),Q.a70(new F.Tc(),L.Eq("Todo Mongol Bichig",s,s,s,s))],r)),p=T.fo(s,100,s),o=T.fo(U.AM("assets/logo.jpg"),200,200),n=T.fo(s,50,s),m=T.yP(L.Eq("Suragch",s,A.v0(s,s,s,s,s,s,s,s,s,s,s,40,s,s,s,s,!0,s,s,s,s,s,s,s),s,s),s,s)
+return new M.u4(new E.q5(0,C.aM,new T.e_(C.m,s,s),new P.P(1/0,56),s),B.abc(H.a([p,o,n,m,T.yP(new O.uj("suragch@suragch.dev",C.Cq,s),s,s),T.am3(H.a([new F.AD(s),T.fo(s,s,20),new F.EP(s),T.fo(s,s,20),new F.Bq(s),T.fo(s,s,20),new F.Eb(s)],r),C.iA,C.jJ,C.jK)],r)),new Z.A1(q,s),s)}}
 F.Ta.prototype={
 $0:function(){return C.U.k_(window,"https://suragch.dev/apps/mongolcode/","Mongol Code Converter")},
 $S:0}
 F.Tb.prototype={
-$0:function(){return C.U.k_(window,"https://suragch.dev/apps/mongoleditor/","Mongol Code Converter")},
+$0:function(){return C.U.k_(window,"https://suragch.dev/apps/mongoleditor/","Mongol Editor")},
 $S:0}
 F.Tc.prototype={
 $0:function(){return C.U.k_(window,"https://suragch.dev/apps/todo_editor/","Todo Mongol Bichig")},

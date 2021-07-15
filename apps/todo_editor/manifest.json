@@ -1,11 +1,11 @@
 {
-    "name": "portfolio",
-    "short_name": "portfolio",
+    "name": "Todo Mongol Bichig",
+    "short_name": "Todo",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Suragch's Portfolio",
+    "description": "A vertical script editor for writing Todo Mongol Bichig",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

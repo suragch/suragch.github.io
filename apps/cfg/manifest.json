@@ -1,11 +1,11 @@
 {
-    "name": "mongol_cfg",
-    "short_name": "mongol_cfg",
+    "name": "Mongolian CFG",
+    "short_name": "Mongolian CFG",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A Context Free Grammar for Mongolian",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

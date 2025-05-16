@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Typing Laser Attack</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #000;
+            color: #0ff; /* Cyan text */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars from game elements */
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #game-container {
+            border: 3px solid #0f0; /* Green border */
+            background-color: #111;
+            position: relative;
+            box-shadow: 0 0 20px #0f0;
+            width: 95vw; /* Responsive width */
+            max-width: 800px; /* Max width for larger screens */
+            aspect-ratio: 4 / 3; /* Maintain aspect ratio */
+            display: flex; /* To center canvas if it's smaller */
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+            background-color: #000;
+            width: 100%;
+            height: 100%;
+        }
+
+        #scoreboard {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            gap: 5px; /* Add gap for wrapped items */
+            width: 95vw;
+            max-width: 800px;
+            padding: 10px 0;
+            font-size: clamp(10px, 2.5vw, 16px); /* Responsive font size, slightly smaller */
+            color: #fff;
+        }
+
+        #scoreboard span {
+            padding: 5px 10px;
+            background-color: #222;
+            border: 1px solid #0f0;
+            border-radius: 5px;
+            flex-grow: 1; /* Allow items to grow and fill space */
+            text-align: center; /* Center text within spans */
+        }
+
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 30px;
+            border: 2px solid #0f0;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            font-size: clamp(16px, 4vw, 24px);
+            display: none; /* Hidden by default */
+            box-shadow: 0 0 15px #0f0;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        #message-box button {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #0f0;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin-top: 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: clamp(14px, 3.5vw, 20px);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        #message-box button:hover {
+            background-color: #fff;
+            color: #0f0;
+        }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 600px) {
+            #scoreboard {
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            #scoreboard span {
+                width: 80%;
+                text-align: center;
+            }
+             #game-container {
+                height: auto; /* Allow height to adjust based on aspect ratio */
+                min-height: 250px; /* Minimum height for playability */
+            }
+        }
+         @media (max-height: 450px) and (orientation: landscape) {
+            #scoreboard {
+                font-size: clamp(8px, 2vw, 12px);
+            }
+             #message-box {
+                font-size: clamp(12px, 3vw, 18px);
+                padding: 15px;
+            }
+            #message-box button {
+                 font-size: clamp(10px, 2.5vw, 16px);
+                 padding: 8px 15px;
+            }
+        }
+
+
+    </style>
+</head>
+<body>
+    <div id="scoreboard">
+        <span id="level-display">Level: 1</span>
+        <span id="score-display">Score: 0</span>
+        <span id="lives-display">Lives: 3</span>
+        <span id="wpm-display">WPM: 5</span>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="message-box">
+        <p id="message-text"></p>
+        <button id="message-button">Start Game</button>
+    </div>
+
+    <script>
+        // --- Game Configuration ---
+        const MAX_LEVELS = 50;
+        const WORDS_PER_LEVEL = 5;
+        const INITIAL_LIVES = 3;
+        const BASE_WPM = 5;
+        const WPM_INCREMENT_PER_LEVEL = 2;
+        const WORD_LENGTH_MIN = 2;
+        const WORD_LENGTH_MAX = 6;
+        const CANNON_HEIGHT = 20; // px, visual representation
+        const LASER_DURATION = 10; // frames, shorter for quicker feel
+        const EXPLOSION_DURATION = 25; // frames
+        const EXPLOSION_MAX_RADIUS = 35; // px, slightly smaller for letter explosions
+        const BASE_EXPLOSION_MAX_RADIUS = 60; // px for word hitting ground
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const levelDisplay = document.getElementById('level-display');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const wpmDisplay = document.getElementById('wpm-display');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const messageButton = document.getElementById('message-button');
+
+        // --- Word List (filtered for length) ---
+        const allWordsList = ["cat", "dog", "sun", "run", "big", "fun", "sky", "fly", "try", "eat", "tea", "pen", "cup", "map", "hat", "top", "joy", "gem", "elf", "ink", "ace", "act", "add", "age", "ago", "aid", "aim", "air", "ale", "all", "and", "ant", "any", "ape", "apt", "arc", "are", "ark", "arm", "art", "ash", "ask", "auk", "awe", "axe", "aye", "bad", "bag", "ban", "bar", "bat", "bay", "bed", "bee", "beg", "bet", "bib", "bid", "bin", "bio", "bit", "boa", "bob", "bog", "boo", "bop", "bow", "box", "boy", "bra", "bud", "bug", "bum", "bun", "bur", "bus", "but", "buy", "bye", "cab", "cad", "cam", "can", "cap", "car", "caw", "cay", "chi", "cod", "cog", "con", "coo", "cop", "cot", "cow", "cox", "coy", "cry", "cub", "cud", "cue", "cur", "cut", "dab", "dad", "dam", "dan", "dap", "day", "den", "dew", "did", "die", "dig", "dim", "din", "dip", "doc", "doe", "don", "dot", "dry", "dub", "dud", "due", "dug", "dun", "duo", "dye", "ear", "eel", "egg", "ego", "eke", "elk", "elm", "emu", "end", "eon", "era", "erg", "err", "eve", "eye", "fad", "fag", "fan", "far", "fat", "fax", "fay", "fed", "fee", "fen", "few", "fig", "fin", "fir", "fit", "fix", "flu", "fob", "foe", "fog", "fop", "for", "fox", "fry", "gag", "gal", "gap", "gas", "gay", "gee", "gel", "get", "gig", "gin", "god", "goo", "got", "gum", "gun", "gut", "guy", "gym", "had", "hag", "ham", "has", "hay", "hem", "hen", "her", "hex", "hey", "hid", "him", "hip", "his", "hit", "hoe", "hog", "hop", "hot", "how", "hub", "hue", "hug", "hum", "hun", "hut", "ice", "icy", "igg", "ill", "imp", "inn", "ion", "ire", "irk", "its", "ivy", "jab", "jag", "jam", "jar", "jaw", "jay", "jet", "jew", "jib", "jig", "job", "jog", "jot", "jug", "jun", "jus", "jut", "keg", "ken", "key", "kid", "kin", "kip", "kit", "lab", "lac", "lad", "lag", "lam", "lap", "lax", "lay", "lea", "led", "lee", "leg", "let", "lid", "lie", "lip", "lit", "lob", "log", "lop", "lot", "low", "lux", "lye", "mad", "mag", "man", "mar", "maw", "may", "men", "met", "mew", "mid", "mil", "mix", "mob", "mod", "mol", "mom", "mon", "mop", "mot", "mud", "mug", "mum", "nab", "nag", "nap", "nay", "net", "new", "nib", "nil", "nip", "nit", "nix", "nob", "nod", "nog", "nor", "nos", "not", "now", "nub", "nun", "nut", "oaf", "oak", "oar", "oat", "odd", "ode", "off", "oft", "ohm", "oil", "old", "one", "opt", "orb", "ore", "our", "out", "ova", "owe", "owl", "own", "pad", "pal", "pap", "par", "pat", "paw", "pay", "pea", "peg", "pep", "per", "pet", "pew", "phi", "pie", "pig", "pip", "pit", "ply", "pod", "poi", "pol", "pop", "pot", "pox", "pro", "pry", "pub", "pug", "pun", "pup", "pus", "put", "rad", "rag", "ram", "ran", "rap", "rat", "raw", "ray", "red", "ref", "rep", "rev", "rib", "rid", "rig", "rim", "rip", "rob", "rod", "roe", "rot", "row", "rub", "rue", "rug", "rum", "rye", "sab", "sac", "sad", "sag", "sap", "sat", "saw", "sax", "say", "sea", "sec", "see", "set", "sew", "sex", "she", "shy", "sin", "sip", "sir", "sit", "six", "ski", "sly", "sob", "sod", "sol", "son", "sop", "sot", "sow", "soy", "spa", "spy", "sty", "sub", "sue", "sum", "sup", "tab", "tad", "tag", "tam", "tan", "tap", "tar", "tat", "tax", "tee", "ten", "the", "tho", "thy", "tic", "tie", "til", "tin", "tip", "tit", "toe", "tog", "ton", "too", "tor", "tot", "tow", "toy", "tub", "tug", "tui", "tun", "two", "use", "van", "vat", "vet", "vie", "vow", "wad", "wag", "wan", "war", "was", "wax", "way", "web", "wed", "wee", "wet", "who", "why", "wig", "win", "wit", "woe", "wok", "won", "woo", "wow", "wry", "yak", "yam", "yap", "yaw", "yea", "yen", "yep", "yes", "yet", "yew", "yin", "yip", "yob", "you", "yuk", "yum", "zap", "zed", "zee", "zen", "zip", "zoo", "able", "acid", "also", "area", "army", "away", "baby", "back", "ball", "band", "bank", "base", "bath", "bear", "beat", "bell", "best", "bird", "blow", "blue", "boat", "body", "bomb", "bond", "bone", "book", "boss", "both", "bowl", "burn", "bush", "busy", "cake", "call", "calm", "came", "camp", "card", "care", "case", "cash", "cast", "cell", "chat", "chip", "city", "club", "coal", "coat", "code", "cold", "come", "cook", "cool", "cope", "copy", "core", "cost", "crew", "crop", "dark", "data", "date", "dawn", "dead", "deal", "dear", "debt", "deep", "deny", "desk", "dial", "dice", "diet", "dirt", "disc", "dive", "dock", "does", "done", "door", "dose", "down", "draw", "drop", "drug", "drum", "duck", "duke", "dust", "duty", "each", "earn", "east", "easy", "edge", "else", "even", "ever", "evil", "exit", "face", "fact", "fail", "fair", "fall", "farm", "fast", "fate", "fear", "feed", "feel", "feet", "fell", "felt", "file", "fill", "film", "find", "fine", "fire", "firm", "fish", "five", "flag", "flat", "flee", "flow", "food", "foot", "ford", "fork", "form", "fort", "four", "free", "frog", "from", "fuel", "full", "fund", "gain", "game", "gang", "gate", "gave", "gear", "gene", "gift", "girl", "give", "glad", "goal", "goes", "gold", "golf", "gone", "good", "gray", "grew", "grey", "grow", "gulf", "hair", "half", "hall", "hand", "hang", "hard", "harm", "hate", "have", "head", "heal", "hear", "heat", "held", "hell", "help", "here", "hero", "hide", "high", "hike", "hill", "hint", "hire", "hold", "hole", "holy", "home", "hope", "host", "hour", "huge", "hunt", "hurt", "idea", "idle", "iron", "item", "jazz", "join", "joke", "jump", "jury", "just", "keen", "keep", "kept", "kick", "kill", "kind", "king", "knee", "knew", "know", "lack", "lady", "laid", "lake", "lamb", "lamp", "land", "lane", "last", "late", "lava", "lawn", "lead", "leaf", "lean", "left", "lend", "less", "life", "lift", "like", "line", "link", "lion", "list", "live", "load", "loan", "lock", "logo", "long", "look", "loop", "lord", "lose", "loss", "lost", "loud", "love", "luck", "lung", "made", "mail", "main", "make", "male", "many", "mark", "mass", "meal", "mean", "meat", "meet", "menu", "mere", "mess", "mice", "mild", "mile", "milk", "mill", "mind", "mine", "miss", "mode", "mood", "moon", "more", "most", "move", "much", "must", "myth", "nail", "name", "navy", "near", "neck", "need", "nest", "news", "next", "nice", "nine", "none", "nose", "note", "noun", "obey", "oily", "okay", "once", "only", "onto", "open", "oral", "oven", "over", "pace", "pack", "page", "paid", "pain", "pair", "palm", "park", "part", "pass", "past", "path", "peak", "pick", "pile", "pill", "pine", "pink", "pipe", "plan", "play", "plot", "plug", "plus", "poem", "poet", "pole", "poll", "pond", "poor", "pope", "port", "post", "pull", "pump", "pure", "push", "quit", "race", "rack", "rain", "rank", "rare", "rate", "read", "real", "rely", "rent", "rest", "rice", "rich", "ride", "ring", "rise", "risk", "road", "rock", "role", "roll", "roof", "room", "root", "rope", "rose", "ruby", "rude", "rule", "rush", "rust", "safe", "sail", "sake", "sale", "salt", "same", "sand", "save", "seat", "seed", "seek", "seem", "seen", "self", "sell", "send", "sent", "ship", "shop", "shot", "show", "sick", "side", "sign", "silk", "sing", "sink", "site", "size", "skin", "slip", "slow", "snow", "soap", "soft", "soil", "sold", "sole", "some", "song", "soon", "sort", "soul", "soup", "spin", "spot", "star", "stay", "step", "stop", "such", "suit", "sure", "swim", "sync", "tack", "tail", "take", "tale", "talk", "tall", "tank", "tape", "task", "taxi", "team", "tear", "tell", "tend", "tent", "term", "test", "text", "than", "that", "them", "then", "they", "thin", "this", "thus", "tide", "tidy", "tier", "tile", "till", "time", "tiny", "tire", "told", "toll", "tone", "tool", "torn", "toss", "tour", "town", "trap", "tree", "trim", "trip", "true", "tube", "tune", "turn", "twin", "type", "ugly", "unit", "upon", "used", "user", "vast", "very", "vest", "view", "void", "vote", "wage", "wait", "wake", "walk", "wall", "want", "ward", "warm", "warn", "wash", "wave", "weak", "wear", "week", "well", "went", "were", "west", "what", "when", "whip", "wide", "wife", "wild", "will", "wind", "wine", "wing", "wipe", "wire", "wise", "wish", "with", "wolf", "wood", "word", "wore", "work", "worm", "worn", "wrap", "yard", "year", "yell", "yoga", "your", "zero", "zone",
+        "about", "above", "abuse", "actor", "acute", "admit", "adopt", "adult", "after", "again", "agent", "agree", "ahead", "alarm", "album", "alert", "alike", "alive", "allow", "alone", "along", "alter", "among", "anger", "angle", "angry", "apart", "apple", "apply", "arena", "argue", "arise", "array", "aside", "asset", "audio", "audit", "avoid", "award", "aware", "awful", "bacon", "badge", "badly", "baker", "bases", "basic", "basis", "beach", "began", "begin", "begun", "being", "below", "bench", "billy", "birth", "black", "blame", "blank", "blast", "blaze", "blend", "blind", "block", "blood", "board", "boast", "bonus", "boost", "booth", "bound", "brain", "brand", "brave", "bread", "break", "breed", "brick", "bride", "brief", "bring", "broad", "broke", "brown", "brush", "buddy", "build", "bunch", "burst", "buyer", "cabin", "cable", "cache", "camel", "canal", "candy", "carry", "catch", "cause", "cease", "chain", "chair", "chalk", "chaos", "charm", "chart", "chase", "cheap", "check", "cheek", "chest", "chief", "child", "chill", "china", "chose", "civic", "civil", "claim", "clash", "class", "clean", "clear", "clerk", "click", "cliff", "climb", "clock", "close", "cloth", "cloud", "coach", "coast", "colon", "color", "comic", "couch", "could", "count", "court", "cover", "crack", "craft", "crash", "crazy", "cream", "creek", "crime", "cross", "crowd", "crown", "crude", "crush", "curve", "cycle", "daily", "dance", "darts", "dated", "dealt", "death", "debut", "decay", "delay", "delta", "dense", "depth", "derby", "devil", "diary", "digit", "dirty", "dodge", "doing", "doubt", "dozen", "draft", "drain", "drama", "drawn", "dress", "drift", "drill", "drink", "drive", "drove", "drunk", "dying", "eager", "early", "earth", "eight", "elbow", "elder", "elect", "elite", "empty", "enemy", "enjoy", "enter", "entry", "equal", "error", "essay", "event", "every", "exact", "excel", "exert", "exist", "extra", "fable", "faced", "faith", "false", "fancy", "fatal", "fault", "favor", "feast", "fence", "ferry", "fever", "fewer", "fiber", "field", "fifth", "fifty", "fight", "final", "first", "fixed", "flame", "flash", "fleet", "flesh", "flier", "float", "flood", "floor", "flour", "fluid", "focus", "force", "forge", "forth", "forty", "forum", "found", "frame", "frank", "fraud", "fresh", "front", "frost", "fruit", "fully", "funny", "fuzzy", "gamma", "gauge", "genre", "ghost", "giant", "given", "glass", "globe", "glory", "glove", "going", "grace", "grade", "grain", "grand", "grant", "grape", "graph", "grasp", "grass", "grave", "gravy", "great", "greed", "green", "greet", "grief", "grill", "grind", "gross", "group", "grove", "grown", "guard", "guess", "guest", "guide", "guilt", "habit", "hairy", "handy", "happy", "hardy", "harsh", "hatch", "hater", "haunt", "haven", "heart", "heavy", "hedge", "hello", "hence", "hobby", "homer", "honey", "honor", "horse", "hotel", "house", "human", "humor", "hurry", "ideal", "image", "imply", "inbox", "incur", "index", "infer", "inner", "input", "inter", "irony", "issue", "ivory", "jelly", "joint", "jolly", "judge", "juice", "juicy", "jumbo", "juror", "kappa", "karma", "kebab", "kinky", "kiosk", "kitty", "knife", "knock", "known", "label", "labor", "laden", "lager", "lance", "large", "laser", "later", "laugh", "layer", "layup", "learn", "lease", "least", "leave", "legal", "lemon", "level", "lever", "light", "liken", "lilac", "limit", "linen", "liner", "links", "liver", "lobby", "local", "logic", "loose", "lorry", "loser", "lunar", "lunch", "lying", "lyric", "macro", "magic", "major", "maker", "mango", "manor", "maple", "march", "marry", "marsh", "match", "matey", "maybe", "mayor", "medal", "media", "melon", "mercy", "merge", "merit", "merry", "metal", "meter", "metro", "micro", "midst", "might", "minor", "minus", "mixer", "model", "moist", "molar", "money", "month", "moral", "morph", "motel", "motor", "mount", "mouse", "mouth", "movie", "mower", "music", "naive", "naked", "nasty", "naval", "nerve", "never", "newer", "newly", "nexus", "niche", "night", "ninja", "ninth", "noble", "noise", "noisy", "north", "notch", "noted", "novel", "nurse", "nylon", "occur", "ocean", "offer", "often", "older", "olive", "omega", "onion", "onset", "opera", "optic", "orbit", "order", "organ", "other", "ought", "ounce", "outer", "owner", "oxide", "ozone", "paced", "paint", "panel", "panic", "pants", "paper", "parch", "pardon", "paris", "party", "pasta", "paste", "patch", "patio", "pause", "peace", "peach", "pedal", "penny", "perch", "pesto", "petal", "phase", "phone", "photo", "piano", "piece", "pilot", "pinch", "pious", "pitch", "pixel", "pizza", "place", "plain", "plane", "plank", "plant", "plate", "plaza", "plead", "pluck", "plumb", "plush", "point", "poker", "polar", "pound", "power", "press", "price", "pride", "prime", "print", "prior", "prize", "probe", "promo", "prone", "proof", "proud", "prove", "proxy", "psych", "pulse", "punch", "puppy", "purse", "quack", "quake", "qualm", "quart", "queen", "query", "quest", "queue", "quick", "quiet", "quill", "quilt", "quite", "quota", "quote", "radar", "radio", "raise", "rally", "ranch", "range", "rapid", "ratio", "reach", "react", "ready", "realm", "rebel", "refer", "reign", "relax", "relay", "renal", "renew", "reply", "reset", "resin", "retro", "rhyme", "rider", "ridge", "rifle", "right", "rigid", "rinse", "risen", "riser", "rival", "river", "roast", "robin", "robot", "rocky", "rodeo", "rogue", "roman", "roomy", "roost", "rough", "round", "route", "rover", "royal", "ruler", "rumor", "rural", "rusty", "sadly", "safer", "saint", "salad", "salon", "salty", "sandy", "satin", "sauce", "scale", "scalp", "scare", "scarf", "scary", "scene", "scent", "scope", "score", "scorn", "scout", "scrap", "screw", "scrub", "scuba", "seize", "sense", "serum", "serve", "setup", "seven", "sewer", "shade", "shady", "shaft", "shake", "shaky", "shall", "shame", "shape", "share", "shark", "sharp", "shave", "shear", "shelf", "shell", "shift", "shine", "shiny", "shirt", "shock", "shoot", "shore", "short", "shout", "shove", "shown", "shrub", "shrug", "sided", "siege", "sight", "sigma", "silky", "silly", "since", "siren", "sixth", "sixty", "sized", "skate", "skill", "skirt", "skull", "slack", "slang", "slate", "slave", "sleek", "sleep", "slice", "slide", "slime", "slimy", "slope", "slump", "small", "smart", "smash", "smell", "smile", "smoke", "smoky", "snack", "snake", "sneak", "snowy", "soapy", "sober", "solar", "solid", "solve", "sonar", "sonic", "sorry", "sound", "south", "space", "spade", "spare", "spark", "speak", "speed", "spell", "spend", "spent", "sperm", "spice", "spicy", "spill", "spine", "spire", "split", "spoil", "spoke", "spoon", "sport", "spray", "squad", "squid", "stack", "staff", "stage", "stain", "stair", "stake", "stale", "stamp", "stand", "stark", "start", "state", "stats", "steak", "steal", "steam", "steel", "steep", "steer", "stein", "stern", "stick", "stiff", "still", "sting", "stink", "stock", "stole", "stood", "stool", "store", "storm", "story", "stove", "strap", "straw", "strip", "stuck", "study", "stuff", "stump", "style", "sugar", "suite", "sunny", "super", "surge", "sushi", "swarm", "swear", "sweat", "sweep", "sweet", "swell", "swept", "swift", "swing", "sword", "sworn", "syrup", "table", "tacky", "taken", "tamer", "tango", "tardy", "taste", "tasty", "teach", "teddy", "teeth", "tense", "tenth", "thank", "theft", "their", "theme", "there", "these", "theta", "thick", "thief", "thigh", "thing", "think", "third", "thorn", "those", "three", "threw", "throw", "thumb", "thump", "tidal", "tiger", "tight", "timer", "timid", "tippy", "tired", "title", "toast", "today", "token", "tonic", "tooth", "topic", "torch", "total", "touch", "tough", "towel", "tower", "toxic", "trace", "track", "tract", "trade", "trail", "train", "trait", "trash", "trawl", "treat", "trend", "trial", "tribe", "trick", "tried", "trike", "trout", "truck", "truly", "trump", "trunk", "trust", "truth", "tummy", "tumor", "tutor", "twice", "twine", "twist", "tying", "udder", "ultra", "uncle", "under", "union", "unite", "unity", "until", "upper", "upset", "urban", "usage", "usher", "usual", "utter", "valid", "value", "valve", "vapor", "vault", "venue", "verse", "video", "villa", "vinyl", "viral", "virus", "visit", "vital", "vivid", "vocal", "voice", "vomit", "voter", "vowel", "wagon", "waist", "waive", "wakey", "waltz", "waste", "watch", "water", "waxy", "weary", "weave", "wedge", "weedy", "weigh", "weird", "whale", "wheat", "wheel", "where", "which", "while", "whine", "whiny", "whirl", "white", "whole", "whose", "wider", "widow", "width", "wield", "wilds", "windy", "witch", "witty", "woman", "women", "world", "wormy", "worry", "worse", "worst", "worth", "would", "wound", "woven", "wrack", "wrath", "wreck", "wring", "wrist", "write", "wrong", "wrote", "yacht", "yeast", "yield", "young", "yummy", "zesty", "zippy", "zonal",
+        "abroad", "absorb", "accent", "accept", "access", "accord", "accuse", "across", "acting", "action", "active", "actual", "adapt", "addict", "adjust", "admire", "advice", "advise", "affair", "affect", "afford", "afraid", "agency", "agenda", "almost", "always", "amount", "analog", "anchor", "animal", "annual", "answer", "anthem", "anyhow", "anyone", "anyway", "appeal", "appear", "arctic", "around", "arrest", "arrive", "arrow", "artist", "aspect", "assert", "assess", "assign", "assist", "assume", "assure", "atomic", "attach", "attack", "attend", "august", "author", "autumn", "avenue", "backup", "baffle", "ballet", "ballot", "banana", "bandit", "banker", "banner", "barely", "barrel", "basket", "battle", "beauty", "become", "before", "behalf", "behave", "behind", "belief", "belong", "berlin", "better", "beyond", "bishop", "bitter", "blazer", "blight", "bodily", "boiler", "border", "borrow", "bother", "bottle", "bottom", "bought", "branch", "breach", "breast", "breath", "bridge", "briefs", "bright", "broker", "bronze", "budget", "bullet", "burden", "bureau", "burial", "butter", "button", "buying", "bypass", "caller", "camera", "campus", "cancel", "cancer", "candle", "carbon", "career", "carpet", "carrot", "cartel", "casino", "castle", "casual", "cattle", "causal", "cement", "center", "centre", "cereal", "chance", "change", "chapel", "charge", "charter", "chaser", "cheese", "cherry", "chess", "choice", "choose", "chorus", "chosen", "church", "cigar", "cinema", "circle", "circus", "citrus", "clause", "cleric", "client", "clinic", "cloudy", "clown", "clutch", "coffee", "cohort", "collar", "colony", "column", "combat", "comedy", "coming", "commit", "common", "comply", "condom", "confer", "consul", "convex", "cookie", "copper", "corner", "corpse", "cosmic", "cotton", "could", "county", "couple", "coupon", "course", "cousin", "cowboy", "cradle", "crafty", "crater", "crawl", "credit", "creepy", "crisis", "critic", "cruise", "crunch", "crystal", "cubic", "cursor", "custom", "cutter", "damage", "dancer", "danger", "darken", "dashed", "dealer", "debate", "debris", "decade", "decent", "decide", "decode", "deduce", "deduct", "deemed", "deeply", "defeat", "defend", "define", "degree", "delete", "demand", "demise", "denial", "dental", "depart", "depend", "deploy", "deputy", "derive", "desert", "design", "desire", "detail", "detect", "device", "devote", "diesel", "differ", "digest", "dinner", "direct", "disarm", "disco", "discover", "dish", "disk", "deploy", "deputy", "derive", "desert", "design", "desire", "detail", "detect", "device", "devote", "diesel", "differ", "digest", "dinner", "direct", "disarm", "disco", "discover", "dish", "disk", "dismiss", "divert", "divide", "doctor", "dollar", "domain", "donate", "double", "dragon", "drawer", "driver", "dublin", "during", "dynamo", "eagle", "earlier", "easily", "easter", "eating", "editor", "effect", "effort", "eighth", "either", "eleven", "elicit", "embark", "embody", "embryo", "emerge", "empire", "employ", "enable", "energy", "engage", "engine", "enlist", "enough", "ensure", "entail", "entity", "enzyme", "epoxy", "equity", "erase", "erode", "escape", "estate", "ethnic", "evade", "evolve", "exceed", "except", "excess", "excuse", "exempt", "exile", "exotic", "expand", "expert", "expire", "export", "extend", "extent", "fabric", "factor", "failed", "fairly", "fallen", "family", "famous", "farmer", "father", "fellow", "female", "fender", "fervor", "fierce", "figure", "filter", "finger", "finish", "finite", "fiscal", "fisher", "flavor", "flight", "floral", "flower", "fluent", "flyer", "folder", "follow", "footer", "forest", "forget", "formal", "format", "former", "fossil", "foster", "fought", "fourth", "freely", "freeze", "french", "friday", "friend", "fringe", "frozen", "fungus", "future", "galaxy", "gallon", "gambit", "gaming", "garage", "garden", "garlic", "gather", "gender", "genius", "gentle", "gently", "gifted", "ginger", "giving", "glance", "global", "glossy", "gluten", "golden", "gospel", "govern", "grail", "gravel", "grease", "groove", "ground", "growth", "guitar", "gutter", "hacker", "hammer", "hamper", "handle", "happen", "harbor", "hardly", "hassle", "hazard", "header", "health", "heaven", "helmet", "herald", "herbal", "hereby", "herein", "heroic", "hidden", "highly", "hiking", "hinder", "hiring", "hockey", "holder", "hollow", "honest", "horror", "hostel", "hover", "humble", "hunter", "hurdle", "hybrid", "idiom", "ignore", "immune", "impact", "import", "impose", "indeed", "indian", "indoor", "induce", "infant", "infect", "inform", "inhale", "inject", "injure", "injury", "inland", "inmate", "insane", "insect", "insert", "inside", "insist", "inspire", "instal", "insult", "insure", "intact", "intend", "intent", "invade", "invent", "invest", "invite", "invoke", "inward", "ironic", "island", "itself", "jacket", "jargon", "jersey", "jigsaw", "jockey", "joking", "kernel", "kettle", "kidney", "killer", "kindly", "knight", "label", "ladder", "lambda", "lament", "landed", "laptop", "lastly", "latent", "latest", "latter", "launch", "lawful", "lawyer", "layout", "leader", "league", "legacy", "legend", "length", "lesser", "lesson", "letter", "lethal", "liable", "liberty", "licence", "likely", "linear", "linger", "lining", "liquid", "listen", "little", "lively", "living", "loaded", "locate", "locker", "lodge", "lonely", "longer", "lounge", "lovely", "lover", "lower", "loyal", "lucky", "lumber", "luxury", "machine", "magnet", "maiden", "mainly", "manage", "manner", "manual", "marble", "margin", "marine", "marker", "market", "marvel", "mason", "master", "matrix", "matter", "mature", "maxim", "meadow", "meager", "meant", "medal", "medium", "melody", "member", "memory", "mental", "mentor", "merely", "merger", "method", "metric", "middle", "milieu", "miller", "mimic", "miner", "minute", "mirror", "misery", "missed", "missile", "mist", "mobile", "modern", "modest", "modify", "module", "moment", "monday", "monkey", "moody", "morbid", "more", "mortal", "mosaic", "mostly", "mother", "motion", "motive", "moving", "muscle", "museum", "mutual", "myself", "mythic", "namely", "narrow", "nation", "native", "nature", "nausea", "nearby", "nearly", "neatly", "nectar", "needle", "negate", "nephew", "nested", "neural", "nicely", "nickel", "niece", "nobody", "nomad", "normal", "notary", "notice", "notify", "notion", "novice", "number", "object", "oblige", "obtain", "obvious", "occupy", "octave", "oddly", "offend", "office", "offset", "olympic", "online", "opaque", "openly", "oppose", "option", "oracle", "orange", "origin", "outlet", "output", "outset", "oval", "overt", "oxygen", "packet", "paddle", "pagan", "palace", "panel", "parade", "parcel", "parent", "parish", "parker", "parody", "parrot", "partly", "pastor", "patent", "pathos", "patrol", "patron", "pave", "peanut", "pencil", "people", "pepper", "period", "permit", "person", "petite", "petrol", "phenom", "phrase", "pickup", "pierce", "pigeon", "piggy", "pioneer", "pirate", "pistol", "pivot", "plague", "planet", "plasma", "player", "please", "pledge", "plight", "plough", "plugin", "plural", "pocket", "podium", "poetic", "poison", "police", "policy", "polish", "polite", "ponder", "pony", "poorly", "poplar", "portal", "porter", "postal", "poster", "potato", "potent", "potter", "powder", "praise", "prayer", "preach", "prefer", "pretty", "price", "priest", "prince", "prison", "privy", "profit", "prompt", "proper", "proton", "proven", "public", "puddle", "punish", "pupil", "puppet", "purely", "purple", "pursue", "puzzle", "python", "quaint", "qualify", "quarry", "quartz", "racial", "racing", "racism", "radial", "radius", "raffle", "random", "ranger", "rarely", "rather", "rating", "reader", "really", "reaper", "reason", "recall", "recent", "recipe", "reckon", "record", "recur", "redeem", "reduce", "refine", "reflex", "reform", "refuge", "refuse", "regain", "regard", "regime", "region", "regret", "reject", "relate", "relief", "relish", "remain", "remark", "remedy", "remind", "remote", "remove", "render", "rental", "repair", "repeal", "repeat", "repel", "report", "rescue", "resent", "reside", "resign", "resist", "resort", "result", "resume", "retail", "retain", "retire", "return", "reveal", "revere", "review", "revise", "revive", "reward", "rhythm", "ribbon", "richer", "robust", "rocket", "rodent", "roller", "roster", "rotate", "rubber", "rubble", "rudder", "rugby", "ruin", "runner", "rustic", "sacred", "saddle", "safari", "safely", "sailor", "salary", "saline", "salmon", "saloon", "salute", "sample", "sandal", "sarcasm", "satire", "savage", "saving", "scalar", "scalp", "scam", "scarce", "scatter", "scenic", "scheme", "school", "scold", "scream", "screen", "script", "scroll", "sculpt", "sealed", "search", "season", "second", "secret", "sector", "secure", "seeing", "seldom", "select", "seller", "senate", "sender", "senior", "sensor", "sequel", "series", "server", "settle", "severe", "sewage", "sexual", "shabby", "shadow", "shaken", "shelter", "sherif", "shield", "shinny", "ship", "shotgun", "shovel", "shower", "shrimp", "shrine", "shrink", "shuttle", "signal", "signed", "silent", "silicon", "silver", "simple", "simply", "singer", "single", "sister", "sitcom", "sketch", "skinny", "skull", "slack", "slam", "sleeve", "slight", "slim", "slogan", "slowly", "slum", "smooth", "snap", "sniper", "snow", "soak", "soccer", "social", "socket", "sodium", "sofa", "soften", "solely", "solve", "somber", "sooner", "sorrow", "source", "soviet", "spam", "span", "sphere", "spider", "spiral", "spirit", "spite", "sponge", "spouse", "spread", "spring", "sprint", "sprite", "spur", "square", "squash", "squat", "stable", "staff", "stale", "stall", "staple", "starch", "stare", "static", "statue", "status", "steady", "stereo", "still", "sting", "stir", "stomach", "strain", "strait", "strand", "stream", "street", "stress", "strict", "stride", "strike", "string", "strive", "stroke", "strong", "struck", "studio", "stumble", "stupid", "submit", "subtle", "suburb", "subway", "sudden", "suffer", "suitor", "summer", "summit", "summon", "sunset", "supply", "surely", "survey", "sustain", "swamp", "sweat", "symbol", "symptom", "syndic", "synergy", "synod", "syntax", "system", "tablet", "tackle", "tactic", "tailor", "talent", "talker", "target", "tariff", "tattoo", "tavern", "teller", "temper", "temple", "tenant", "tender", "tennis", "tenure", "terror", "thaw", "thence", "theory", "thesis", "thirst", "thirty", "though", "thread", "threat", "thrill", "thrive", "throat", "throne", "thrust", "ticket", "timber", "timely", "timing", "tiptoe", "tissue", "tobacco", "toilet", "tolled", "tomato", "tongue", "tonight", "torque", "tort", "toward", "tracer", "tragic", "trance", "travel", "tread", "treaty", "tribal", "tricky", "trifle", "triple", "troop", "trophy", "troupe", "truce", "tulip", "tumble", "tunnel", "turkey", "turtle", "twelve", "twenty", "tycoon", "tyrant", "ulcer", "unable", "unfair", "unify", "unique", "unless", "unlike", "unveil", "update", "uphold", "urgent", "useful", "utmost", "vacant", "vacuum", "vague", "valley", "vanish", "vanity", "varied", "vastly", "vector", "vegan", "velvet", "vendor", "venom", "verbal", "verdict", "verge", "verify", "versus", "vessel", "viable", "vicar", "victim", "viewer", "violet", "virtual", "virtue", "vision", "visual", "volley", "voyage", "waffle", "waiter", "wallet", "wander", "warden", "warm", "warrant", "warrior", "wealth", "weapon", "weekly", "weep", "weird", "welfare", "western", "when", "whisky", "wicked", "widely", "widen", "widow", "willing", "willow", "wimp", "window", "winner", "winter", "wisdom", "wizard", "wonder", "wooden", "worker", "worry", "worthy", "writer", "yearly", "yellow", "zenith", "zombie", "zonal"];
+        const gameWords = allWordsList.filter(w => w.length >= WORD_LENGTH_MIN && w.length <= WORD_LENGTH_MAX);
+
+
+        // --- Game State Variables ---
+        let currentLevel;
+        let score;
+        let lives;
+        let currentWPM;
+        let wordsThisLevel; // Words successfully typed in current level
+        let gameActive;
+        let animationFrameId;
+
+        let fallingWord = null; // { text: "word", x: 0, y: 0, speed: 0, typedIndex: 0, letters: [{char:'w', x:0, y:0, hit:false}, ...] }
+        let activeLasers = []; // { x1, y1, x2, y2, color, framesLeft }
+        let activeExplosions = []; // { x, y, radius, maxRadius, framesLeft, color }
+        let cannon = { x: 0, y: 0, width: 50, height: CANNON_HEIGHT };
+        let lastFrameTime = 0;
+        const targetFPS = 60;
+        const frameInterval = 1000 / targetFPS;
+        let audioInitialized = false;
+
+
+        // --- Audio Setup (Tone.js) ---
+        let laserSynth, missSynth, letterExplosionSynth, baseExplosionSynth, levelUpSynth, gameOverSynth;
+
+        function initializeAudio() {
+            if (audioInitialized) return;
+            // Laser Hit Sound
+            laserSynth = new Tone.Synth({
+                oscillator: { type: "triangle" },
+                envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.1 },
+                volume: -10
+            }).toDestination();
+
+            // Laser Miss Sound
+            missSynth = new Tone.Synth({
+                oscillator: { type: "sawtooth" },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 },
+                volume: -15
+            }).toDestination();
+            
+            // Letter Explosion Sound
+            letterExplosionSynth = new Tone.NoiseSynth({
+                noise: { type: "pink" },
+                envelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.05 },
+                volume: -12
+            }).toDestination();
+
+            // Base Explosion Sound (when word hits ground)
+            baseExplosionSynth = new Tone.NoiseSynth({
+                noise: { type: "brown" },
+                envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.2 },
+                volume: -5 
+            }).toDestination();
+
+            // Level Up Sound
+            levelUpSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sine" },
+                envelope: { attack: 0.05, decay: 0.2, sustain: 0.3, release: 0.5 },
+                volume: -8
+            }).toDestination();
+            
+            // Game Over Sound
+            gameOverSynth = new Tone.PolySynth(Tone.Synth, {
+                 oscillator: { type: "square" },
+                 envelope: { attack: 0.1, decay: 0.5, sustain: 0, release: 0.5 },
+                 volume: -8
+            }).toDestination();
+
+            audioInitialized = true;
+            console.log("Audio Initialized");
+        }
+        
+        // Function to play sounds, ensuring Tone.start() is called
+        async function playSound(synth, noteOrDuration, time) {
+            if (!audioInitialized) initializeAudio();
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            if (synth instanceof Tone.NoiseSynth) {
+                synth.triggerAttackRelease(noteOrDuration, time);
+            } else if (synth instanceof Tone.PolySynth) {
+                 synth.triggerAttackRelease(noteOrDuration, "8n", time); // Example duration for polysynth
+            }
+            else {
+                synth.triggerAttackRelease(noteOrDuration, "8n", time);
+            }
+        }
+
+
+        // --- Canvas Sizing ---
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            
+            let canvasWidth, canvasHeight;
+            if (containerWidth / containerHeight > 4 / 3) { 
+                canvasHeight = containerHeight;
+                canvasWidth = canvasHeight * (4 / 3);
+            } else { 
+                canvasWidth = containerWidth;
+                canvasHeight = canvasWidth * (3 / 4);
+            }
+
+            canvas.width = Math.max(320, canvasWidth); // Minimum width
+            canvas.height = Math.max(240, canvasHeight); // Minimum height
+
+            cannon.x = canvas.width / 2 - cannon.width / 2;
+            cannon.y = canvas.height - cannon.height - 5; 
+            
+            if (fallingWord) {
+                calculateLetterPositions(fallingWord);
+            }
+            // Ensure game elements are redrawn correctly after resize
+            if(gameActive || (!gameActive && currentLevel > 0)) { // If game is running or on a message screen
+                draw();
+            }
+        }
+
+
+        // --- Game Initialization and Control ---
+        function initGame() {
+            currentLevel = 1;
+            score = 0;
+            lives = INITIAL_LIVES;
+            wordsThisLevel = 0;
+            gameActive = false;
+            activeLasers = [];
+            activeExplosions = [];
+            fallingWord = null;
+            updateScoreboard();
+            resizeCanvas(); 
+            showMessage("Welcome to Typing Laser Attack!\nType the falling words.\n3 misses and it's Game Over.", "Start Game", () => {
+                if (!audioInitialized) initializeAudio(); // Initialize audio on first user interaction
+                Tone.start(); // Ensure audio context is running
+                startGame();
+            });
+        }
+
+        function startGame() {
+            hideMessage();
+            gameActive = true;
+            startLevel();
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            lastFrameTime = performance.now();
+            gameLoop(lastFrameTime);
+        }
+
+        function startLevel() {
+            currentWPM = BASE_WPM + (currentLevel - 1) * WPM_INCREMENT_PER_LEVEL;
+            wordsThisLevel = 0;
+            updateScoreboard();
+            if (currentLevel > 1) {
+                playSound(levelUpSynth, ["C4", "E4", "G4"], Tone.now());
+                showMessage(`Level ${currentLevel}!`, "Continue", () => {
+                    hideMessage();
+                    spawnNextWord();
+                }, 1500); 
+            } else {
+                 spawnNextWord();
+            }
+        }
+
+        function levelComplete() {
+            currentLevel++;
+            if (currentLevel > MAX_LEVELS) {
+                gameWon();
+            } else {
+                playSound(levelUpSynth, ["C5", "E5", "G5", "C6"], Tone.now());
+                showMessage(`Level ${currentLevel -1} Complete!`, "Next Level", () => {
+                     hideMessage();
+                     startLevel();
+                });
+            }
+        }
+
+        function gameOver() {
+            gameActive = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            playSound(gameOverSynth, ["C3", "G2", "C2"], Tone.now());
+            showMessage(`Game Over!\nFinal Score: ${score}\nLevel Reached: ${currentLevel}`, "Restart Game", initGame);
+        }
+        
+        function gameWon() {
+            gameActive = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            playSound(levelUpSynth, ["C4", "E4", "G4", "C5", "E5", "G5", "C6"], Tone.now());
+            showMessage(`Congratulations! You beat all ${MAX_LEVELS} levels!\nFinal Score: ${score}`, "Play Again?", initGame);
+        }
+
+
+        // --- Word Mechanics ---
+        function getRandomWord() {
+            const randomIndex = Math.floor(Math.random() * gameWords.length);
+            return gameWords[randomIndex];
+        }
+
+        function spawnNextWord() {
+            if (!gameActive) return;
+            if (wordsThisLevel >= WORDS_PER_LEVEL) {
+                levelComplete();
+                return;
+            }
+
+            const text = getRandomWord();
+            // Ensure ctx.font is set before measuring text for accurate initial positioning
+            ctx.font = `${Math.min(30, Math.max(12, canvas.width / 20))}px 'Press Start 2P'`; // Responsive font for words
+            
+            const wordFallDurationSeconds = 60 / currentWPM; 
+            const speed = canvas.height / (wordFallDurationSeconds * targetFPS); 
+
+            fallingWord = {
+                text: text,
+                x: Math.random() * Math.max(0, (canvas.width - ctx.measureText(text).width)), // Ensure x is not negative
+                y: 0,
+                speed: Math.max(0.5, speed), 
+                typedIndex: 0,
+                letters: []
+            };
+            calculateLetterPositions(fallingWord);
+        }
+        
+        function calculateLetterPositions(wordObj) {
+            if (!wordObj) return;
+            wordObj.letters = [];
+            let currentX = wordObj.x;
+            // Ensure font is set for accurate measurements
+            const currentFontSize = Math.min(30, Math.max(12, canvas.width / 20));
+            ctx.font = `${currentFontSize}px 'Press Start 2P'`;
+            const charHeight = currentFontSize * 1.2; 
+            
+            for (let i = 0; i < wordObj.text.length; i++) {
+                const char = wordObj.text[i];
+                const charWidth = ctx.measureText(char).width;
+                wordObj.letters.push({
+                    char: char,
+                    x: currentX + charWidth / 2, 
+                    y: wordObj.y + charHeight / 2, 
+                    width: charWidth,
+                    hit: false
+                });
+                currentX += charWidth;
+            }
+        }
+
+
+        function updateFallingWord(deltaTime) {
+            if (!fallingWord) return;
+
+            fallingWord.y += fallingWord.speed * (deltaTime / (1000 / targetFPS)); 
+            
+            const currentFontSize = parseInt(ctx.font); // Get current font size for charHeight
+            const charHeight = currentFontSize * 1.2; 
+            fallingWord.letters.forEach(letter => {
+                letter.y = fallingWord.y + charHeight / 2;
+            });
+
+
+            if (fallingWord.y + charHeight > canvas.height - CANNON_HEIGHT/2) { // Adjusted to hit slightly above cannon base
+                lives--;
+                score -= 10; 
+                if (score < 0) score = 0;
+                updateScoreboard();
+                // Use the specific base explosion radius
+                createExplosion(fallingWord.x + ctx.measureText(fallingWord.text).width / 2, canvas.height - CANNON_HEIGHT, BASE_EXPLOSION_MAX_RADIUS); 
+                playSound(baseExplosionSynth, "0.3s", Tone.now());
+                
+                if (lives <= 0) {
+                    gameOver();
+                } else {
+                    wordsThisLevel++; 
+                    fallingWord = null;
+                    spawnNextWord();
+                }
+            }
+        }
+
+        // --- Input Handling ---
+        function handleKeyPress(event) {
+            if (!gameActive || !fallingWord) return;
+             if (!audioInitialized) { // Ensure audio is ready if game started without button click (e.g. dev refresh)
+                initializeAudio();
+                Tone.start();
+            }
+
+            const typedChar = event.key.toLowerCase();
+            if (typedChar.length !== 1 || !(/[a-z]/.test(typedChar))) return; 
+
+            const expectedChar = fallingWord.text[fallingWord.typedIndex].toLowerCase();
+            const targetLetter = fallingWord.letters[fallingWord.typedIndex];
+
+            if (typedChar === expectedChar) {
+                fallingWord.letters[fallingWord.typedIndex].hit = true;
+                fallingWord.typedIndex++;
+                score += 10;
+                updateScoreboard();
+                createLaser(targetLetter.x, targetLetter.y, true);
+                // Create explosion at the letter's position
+                createExplosion(targetLetter.x, targetLetter.y, EXPLOSION_MAX_RADIUS, '#0f0'); // Greenish explosion for hit
+                playSound(laserSynth, "C5", Tone.now());
+                playSound(letterExplosionSynth, "0.05s", Tone.now() + 0.01);
+
+
+                if (fallingWord.typedIndex === fallingWord.text.length) { 
+                    score += fallingWord.text.length * 5; 
+                    wordsThisLevel++;
+                    fallingWord = null;
+                    spawnNextWord();
+                }
+            } else { 
+                score -= 5;
+                if (score < 0) score = 0;
+                updateScoreboard();
+                createLaser(cannon.x + cannon.width / 2, targetLetter.y - 50, false); // Miss aims above
+                playSound(missSynth, "A2", Tone.now());
+            }
+        }
+
+        // --- Visual Effects ---
+        function createLaser(targetX, targetY, hit) {
+            activeLasers.push({
+                x1: cannon.x + cannon.width / 2,
+                y1: cannon.y,
+                x2: targetX,
+                y2: targetY,
+                color: hit ? '#0f0' : '#f00', 
+                framesLeft: LASER_DURATION
+            });
+        }
+
+        function updateLasers() {
+            activeLasers = activeLasers.filter(laser => {
+                laser.framesLeft--;
+                return laser.framesLeft > 0;
+            });
+        }
+        
+        // Added maxRadius parameter and optional color
+        function createExplosion(x, y, maxRadius = EXPLOSION_MAX_RADIUS, color = null) {
+            activeExplosions.push({
+                x: x,
+                y: y,
+                radius: 0,
+                maxRadius: maxRadius,
+                framesLeft: EXPLOSION_DURATION,
+                color: color || `hsl(${Math.random() * 30 + 15}, 100%, 60%)` // Default orange/yellow/red
+            });
+        }
+
+        function updateExplosions() {
+            activeExplosions = activeExplosions.filter(exp => {
+                exp.framesLeft--;
+                // Animate radius from 0 to maxRadius then back to 0 for a better effect
+                const progress = 1 - (exp.framesLeft / EXPLOSION_DURATION);
+                if (progress < 0.5) {
+                    exp.radius = exp.maxRadius * (progress * 2); // Grow
+                } else {
+                    exp.radius = exp.maxRadius * (1 - (progress - 0.5) * 2); // Shrink
+                }
+                return exp.framesLeft > 0;
+            });
+        }
+
+        // --- Drawing ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw cannon
+            ctx.fillStyle = '#0f0'; 
+            ctx.fillRect(cannon.x, cannon.y, cannon.width, cannon.height);
+            ctx.beginPath(); // More detailed cannon
+            ctx.moveTo(cannon.x + cannon.width / 2 - 5, cannon.y);
+            ctx.lineTo(cannon.x + cannon.width / 2 - 8, cannon.y - 10);
+            ctx.lineTo(cannon.x + cannon.width / 2 + 8, cannon.y - 10);
+            ctx.lineTo(cannon.x + cannon.width / 2 + 5, cannon.y);
+            ctx.fill();
+
+
+            // Draw falling word
+            if (fallingWord) {
+                // Font size calculation moved to spawnNextWord and calculateLetterPositions for consistency
+                // ctx.font is set within calculateLetterPositions which is called before drawing if word exists
+                ctx.textBaseline = 'middle'; // Better vertical alignment for letters
+                
+                // Ensure letter positions are up-to-date if font size might change due to resize
+                // calculateLetterPositions(fallingWord); // This might be redundant if called enough elsewhere
+
+                let currentX = fallingWord.x;
+                for (let i = 0; i < fallingWord.text.length; i++) {
+                    const letterObj = fallingWord.letters[i];
+                    if (!letterObj.hit) { // Only draw letters that haven't been hit
+                        ctx.fillStyle = '#fff'; 
+                        // Use individual letter x for precise drawing, y from wordObj
+                        ctx.fillText(letterObj.char, letterObj.x - letterObj.width/2, fallingWord.y + (parseInt(ctx.font) * 1.2)/2);
+                    }
+                }
+            }
+
+            // Draw lasers
+            activeLasers.forEach(laser => {
+                ctx.beginPath();
+                ctx.moveTo(laser.x1, laser.y1);
+                ctx.lineTo(laser.x2, laser.y2);
+                ctx.strokeStyle = laser.color;
+                ctx.lineWidth = laser.hit ? 3 : 2; // Thicker for hits
+                ctx.shadowColor = laser.color;
+                ctx.shadowBlur = laser.hit ? 10 : 5;
+                ctx.stroke();
+                ctx.shadowBlur = 0; // Reset shadow
+            });
+
+            // Draw explosions
+            activeExplosions.forEach(exp => {
+                ctx.beginPath();
+                ctx.arc(exp.x, exp.y, Math.max(0, exp.radius), 0, Math.PI * 2); // Ensure radius isn't negative
+                ctx.fillStyle = exp.color;
+                ctx.globalAlpha = exp.framesLeft / EXPLOSION_DURATION; // Fade out
+                ctx.fill();
+                ctx.globalAlpha = 1.0; // Reset alpha
+            });
+        }
+
+        // --- UI Updates ---
+        function updateScoreboard() {
+            levelDisplay.textContent = `Level: ${currentLevel}`;
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
+            wpmDisplay.textContent = `WPM: ${currentWPM || BASE_WPM}`;
+        }
+
+        function showMessage(text, buttonText, callback, autoHideDelay = 0) {
+            messageText.innerHTML = text.replace(/\n/g, '<br>'); 
+            messageButton.textContent = buttonText;
+            
+            // Ensure Tone.js is started by user gesture if not already
+            const wrappedCallback = async () => {
+                if (Tone.context.state !== 'running') {
+                    await Tone.start();
+                }
+                callback();
+            };
+            messageButton.onclick = wrappedCallback;
+            
+            messageBox.style.display = 'block';
+
+            if (autoHideDelay > 0) {
+                setTimeout(() => {
+                    if (messageBox.style.display === 'block' && messageButton.onclick === wrappedCallback) { 
+                       wrappedCallback(); 
+                    }
+                }, autoHideDelay);
+            }
+        }
+
+        function hideMessage() {
+            messageBox.style.display = 'none';
+        }
+
+        // --- Game Loop ---
+        function gameLoop(timestamp) {
+            if (!gameActive && currentLevel > 0) { 
+                 draw(); 
+                 if (activeExplosions.length > 0 || activeLasers.length > 0) {
+                    updateExplosions();
+                    updateLasers();
+                    animationFrameId = requestAnimationFrame(gameLoop);
+                 }
+                 return;
+            }
+            if (!gameActive) return;
+
+
+            const deltaTime = timestamp - lastFrameTime;
+            const cappedDeltaTime = Math.min(deltaTime, frameInterval * 3); 
+
+            updateFallingWord(cappedDeltaTime);
+            updateLasers();
+            updateExplosions();
+            draw();
+            
+            lastFrameTime = timestamp;
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('keydown', handleKeyPress);
+        window.addEventListener('resize', resizeCanvas); 
+
+        // --- Start ---
+        // Audio will be initialized on the first click of the "Start Game" button.
+        initGame(); 
+
+    </script>
+</body>
+</html>

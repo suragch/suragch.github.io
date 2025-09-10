@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Card Sorter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem;
+            flex-direction: column;
+        }
+
+        .card-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            min-height: 250px;
+            margin-top: 2rem;
+        }
+
+        .card-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.3s ease;
+            will-change: transform;
+        }
+
+        .card-wrapper.selected {
+            transform: translateY(-20px) scale(1.1);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+
+        .card {
+            width: 80px;
+            height: 120px;
+            background-color: white;
+            border: 1px solid #cbd5e0;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            font-weight: 700;
+            transition: transform 0.5s ease;
+            backface-visibility: hidden;
+        }
+
+        .card.red {
+            color: #ef4444;
+            /* red-500 */
+        }
+
+        .card.black {
+            color: #1f2937;
+            /* gray-800 */
+        }
+
+        .card-value {
+            font-size: 1.5rem;
+        }
+
+        .card-suit {
+            font-size: 2.5rem;
+            line-height: 1;
+        }
+
+        .hidden-element {
+            display: none;
+        }
+
+        .comparison-label {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 0.875rem;
+            /* text-sm */
+            padding: 4px 8px;
+            border-radius: 9999px;
+            /* rounded-full */
+            position: absolute;
+            bottom: 100%;
+            margin-bottom: 8px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .comparison-label.show {
+            opacity: 1;
+        }
+
+        /* Style for disabled button */
+        #swapBtn:disabled {
+            background-color: #a5b4fc;
+            /* indigo-300 */
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-100 flex flex-col items-center p-4">
+
+    <div class="bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full">
+        <h1 class="text-4xl font-bold text-center text-slate-800 mb-6">Interactive Card Sorter</h1>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-8">
+            <div class="flex items-center space-x-2">
+                <label for="cardCount" class="text-slate-600 font-medium">Number of Cards:</label>
+                <select id="cardCount" class="p-2 rounded-md border border-slate-300">
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5" selected>5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                    <option value="11">11</option>
+                    <option value="12">12</option>
+                    <option value="13">13</option>
+                </select>
+            </div>
+            <button id="newGameBtn"
+                class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                New Game
+            </button>
+        </div>
+
+        <div id="cardContainer" class="card-container">
+            <!-- Cards will be dynamically inserted here -->
+        </div>
+
+        <div id="messageBox" class="text-center mt-6 text-slate-700 font-medium text-lg">
+            Click on a card to select it.
+        </div>
+
+        <div id="controlButtons" class="flex justify-center space-x-4 mt-6">
+            <button id="swapBtn" disabled
+                class="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
+                Swap
+            </button>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function () {
+            const cardContainer = document.getElementById('cardContainer');
+            const messageBox = document.getElementById('messageBox');
+            const newGameBtn = document.getElementById('newGameBtn');
+            const cardCountSelect = document.getElementById('cardCount');
+            const swapBtn = document.getElementById('swapBtn');
+            const cardValues = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+            const suits = [
+                { symbol: '♠', color: 'black' },
+                { symbol: '♥', color: 'red' },
+                { symbol: '♦', color: 'red' },
+                { symbol: '♣', color: 'black' }
+            ];
+            let cardElements = [];
+            let selectedCards = [];
+            let isAnimating = false;
+
+            // Fisher-Yates shuffle algorithm
+            function shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            // Renders the cards to the DOM
+            function renderCards(count) {
+                removeLabels();
+                cardContainer.innerHTML = '';
+
+                let deck = [];
+                for (let i = 0; i < count; i++) {
+                    const randomValueIndex = Math.floor(Math.random() * cardValues.length);
+                    const randomSuitIndex = Math.floor(Math.random() * suits.length);
+                    deck.push({
+                        value: cardValues[randomValueIndex],
+                        numValue: randomValueIndex,
+                        suit: suits[randomSuitIndex].symbol,
+                        color: suits[randomSuitIndex].color
+                    });
+                }
+
+                const shuffledDeck = shuffle(deck);
+
+                shuffledDeck.forEach((cardData) => {
+                    const cardWrapper = document.createElement('div');
+                    cardWrapper.classList.add('card-wrapper');
+                    cardWrapper.dataset.numValue = cardData.numValue;
+
+                    const card = document.createElement('div');
+                    card.classList.add('card', 'flex', 'flex-col', 'items-center', 'justify-between', 'shadow-md', 'border', 'border-slate-300', 'hover:border-blue-500', 'hover:shadow-lg', 'transition-all');
+                    card.classList.add(cardData.color);
+
+                    const topCorner = document.createElement('div');
+                    topCorner.classList.add('self-start', 'text-xl');
+                    topCorner.textContent = cardData.value;
+                    card.appendChild(topCorner);
+
+                    const suitSymbol = document.createElement('div');
+                    suitSymbol.classList.add('card-suit', 'text-5xl');
+                    suitSymbol.textContent = cardData.suit;
+                    card.appendChild(suitSymbol);
+
+                    const bottomCorner = document.createElement('div');
+                    bottomCorner.classList.add('self-end', 'text-xl');
+                    bottomCorner.textContent = cardData.value;
+                    card.appendChild(bottomCorner);
+
+                    cardWrapper.appendChild(card);
+                    cardContainer.appendChild(cardWrapper);
+                });
+                cardElements = Array.from(cardContainer.children);
+                attachEventListeners();
+            }
+
+            // Attaches click listeners to each card
+            function attachEventListeners() {
+                cardElements.forEach(card => {
+                    card.addEventListener('click', handleCardClick);
+                });
+            }
+
+            // Handles card selection logic
+            function handleCardClick(event) {
+                if (isAnimating) return;
+
+                const cardWrapper = event.currentTarget;
+                const isSelected = selectedCards.includes(cardWrapper);
+
+                if (isSelected) {
+                    // If the card is already selected, unselect it.
+                    selectedCards = selectedCards.filter(c => c !== cardWrapper);
+                    cardWrapper.classList.remove('selected');
+                } else if (selectedCards.length < 2) {
+                    // If less than 2 cards are selected, add the new one.
+                    selectedCards.push(cardWrapper);
+                    cardWrapper.classList.add('selected');
+                } else {
+                    // If a third card is selected, clear the old selection and start a new one.
+                    clearSelection();
+                    selectedCards.push(cardWrapper);
+                    cardWrapper.classList.add('selected');
+                }
+
+                updateUI();
+            }
+
+            // Updates the UI based on the number of selected cards
+            function updateUI() {
+                removeLabels();
+                if (selectedCards.length === 2) {
+                    swapBtn.disabled = false;
+                    messageBox.textContent = 'Two cards are selected.';
+                    displayLabels();
+                } else {
+                    swapBtn.disabled = true;
+                    if (selectedCards.length === 1) {
+                        messageBox.textContent = 'One card is selected. Select another.';
+                    } else {
+                        messageBox.textContent = 'Click on a card to select it.';
+                    }
+                }
+            }
+
+            // Creates and displays the "Big", "Small", or "Same" labels
+            function displayLabels() {
+                if (selectedCards.length !== 2) return;
+
+                const val1 = parseInt(selectedCards[0].dataset.numValue, 10);
+                const val2 = parseInt(selectedCards[1].dataset.numValue, 10);
+
+                const label1 = document.createElement('div');
+                label1.classList.add('comparison-label');
+                const label2 = document.createElement('div');
+                label2.classList.add('comparison-label');
+
+                if (val1 > val2) {
+                    label1.textContent = 'BIG';
+                    label2.textContent = 'SMALL';
+                } else if (val2 > val1) {
+                    label1.textContent = 'SMALL';
+                    label2.textContent = 'BIG';
+                } else {
+                    label1.textContent = 'SAME';
+                    label2.textContent = 'SAME';
+                }
+
+                selectedCards[0].appendChild(label1);
+                selectedCards[1].appendChild(label2);
+
+                requestAnimationFrame(() => {
+                    label1.classList.add('show');
+                    label2.classList.add('show');
+                });
+            }
+
+            // Removes all label overlays from the DOM
+            function removeLabels() {
+                document.querySelectorAll('.comparison-label').forEach(label => label.remove());
+            }
+
+            // Handles the Swap button click with animation
+            function handleSwap() {
+                if (isAnimating || selectedCards.length !== 2) return;
+                isAnimating = true;
+                removeLabels();
+
+                const card1 = selectedCards[0];
+                const card2 = selectedCards[1];
+
+                const card1Rect = card1.getBoundingClientRect();
+                const card2Rect = card2.getBoundingClientRect();
+
+                const card1Clone = card1.cloneNode(true);
+                const card2Clone = card2.cloneNode(true);
+                card1Clone.classList.remove('selected');
+                card2Clone.classList.remove('selected');
+                card1Clone.style.transition = 'none';
+                card2Clone.style.transition = 'none';
+
+                card1.style.visibility = 'hidden';
+                card2.style.visibility = 'hidden';
+
+                // Position clones at the original positions
+                card1Clone.style.position = 'absolute';
+                card2Clone.style.position = 'absolute';
+                card1Clone.style.left = `${card1Rect.left}px`;
+                card1Clone.style.top = `${card1Rect.top}px`;
+                card2Clone.style.left = `${card2Rect.left}px`;
+                card2Clone.style.top = `${card2Rect.top}px`;
+                card1Clone.style.zIndex = '20';
+                card2Clone.style.zIndex = '20';
+
+                document.body.appendChild(card1Clone);
+                document.body.appendChild(card2Clone);
+
+                // Start the swap animation
+                requestAnimationFrame(() => {
+                    card1Clone.style.transition = 'transform 0.5s ease-in-out';
+                    card2Clone.style.transition = 'transform 0.5s ease-in-out';
+                    card1Clone.style.transform = `translate(${card2Rect.left - card1Rect.left}px, ${card2Rect.top - card1Rect.top}px)`;
+                    card2Clone.style.transform = `translate(${card1Rect.left - card2Rect.left}px, ${card1Rect.top - card2Rect.top}px)`;
+                });
+
+                setTimeout(() => {
+                    // Update DOM after animation
+                    const parent = card1.parentNode;
+                    const nextSibling1 = card1.nextSibling;
+                    const nextSibling2 = card2.nextSibling;
+                    parent.insertBefore(card2, nextSibling1);
+                    parent.insertBefore(card1, nextSibling2);
+
+                    card1.style.visibility = '';
+                    card2.style.visibility = '';
+
+                    card1Clone.remove();
+                    card2Clone.remove();
+
+                    isAnimating = false;
+                    clearSelection();
+                }, 500); // Duration of the animation
+            }
+
+            // Clears the selected cards and hides buttons
+            function clearSelection() {
+                selectedCards.forEach(card => card.classList.remove('selected'));
+                selectedCards = [];
+                updateUI();
+            }
+
+            // Event listeners for buttons
+            newGameBtn.addEventListener('click', () => {
+                clearSelection();
+                renderCards(parseInt(cardCountSelect.value, 10));
+            });
+            swapBtn.addEventListener('click', handleSwap);
+
+            // Add a click listener to the body to handle clicks outside the cards
+            document.body.addEventListener('click', (event) => {
+                // If a click occurs on a card or a control button, don't clear the selection
+                const isClickOnCard = event.target.closest('.card-wrapper');
+                const isClickOnButton = event.target.closest('#controlButtons');
+
+                if (!isClickOnCard && !isClickOnButton && selectedCards.length === 2) {
+                    clearSelection();
+                }
+            });
+
+            // Initial render
+            renderCards(5);
+        };
+    </script>
+</body>
+
+</html>

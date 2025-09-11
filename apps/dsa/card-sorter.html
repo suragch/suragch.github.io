@@ -21,14 +21,18 @@
             flex-direction: column;
         }
 
-        .card-container {
+        .card-row,
+        .label-row {
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-end;
             flex-wrap: nowrap;
             gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .card-row {
             min-height: 250px;
-            margin-top: 2rem;
         }
 
         .card-wrapper {
@@ -41,15 +45,12 @@
             will-change: transform;
             flex-shrink: 0;
             user-select: none;
-            /* Fix for rounded corners on transform */
             border-radius: 12px;
-            overflow: hidden;
         }
 
         .card-wrapper.selected {
             transform: translateY(-20px) scale(1.1);
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-            z-index: 10;
         }
 
         .card {
@@ -102,7 +103,6 @@
             opacity: 1;
         }
 
-        /* Style for disabled button */
         #swapBtn:disabled {
             background-color: #a5b4fc;
             /* indigo-300 */
@@ -110,20 +110,12 @@
             box-shadow: none;
         }
 
-        .index-label-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 1rem;
-            margin-top: 0.5rem;
-            user-select: none;
-        }
-
-        .index-label {
+        .index-label-wrapper {
             text-align: center;
             font-weight: 500;
             color: #475569;
             /* slate-600 */
+            user-select: none;
         }
     </style>
 </head>
@@ -149,16 +141,16 @@
             </div>
             <button id="newGameBtn"
                 class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors">
-                New Game
+                Shuffle
             </button>
         </div>
 
-        <div id="cardContainer" class="card-container">
+        <div id="cardContainer" class="card-row">
             <!-- Cards will be dynamically inserted here -->
         </div>
 
-        <div id="indexLabelContainer" class="index-label-container">
-            <!-- Index labels will be dynamically inserted here -->
+        <div id="labelContainer" class="label-row">
+            <!-- Labels will be dynamically inserted here -->
         </div>
 
         <div id="messageBox" class="text-center mt-6 text-slate-700 font-medium text-lg">
@@ -176,7 +168,7 @@
     <script>
         window.onload = function () {
             const cardContainer = document.getElementById('cardContainer');
-            const indexLabelContainer = document.getElementById('indexLabelContainer');
+            const labelContainer = document.getElementById('labelContainer');
             const messageBox = document.getElementById('messageBox');
             const newGameBtn = document.getElementById('newGameBtn');
             const cardCountSelect = document.getElementById('cardCount');
@@ -205,7 +197,7 @@
             function renderCards(count) {
                 removeLabels();
                 cardContainer.innerHTML = '';
-                indexLabelContainer.innerHTML = '';
+                labelContainer.innerHTML = '';
 
                 let deck = [];
                 for (let i = 0; i < count; i++) {
@@ -225,7 +217,9 @@
                 const containerWidth = cardContainer.offsetWidth;
                 const gap = 16; // 1rem
                 const totalGap = (count - 1) * gap;
-                const cardWidth = (containerWidth - totalGap) / count;
+                const maxCardWidth = 150;
+                const calculatedCardWidth = (containerWidth - totalGap) / count;
+                const cardWidth = Math.min(calculatedCardWidth, maxCardWidth);
                 const cardHeight = cardWidth * 1.5;
 
                 shuffledDeck.forEach((cardData, i) => {
@@ -261,11 +255,13 @@
                     cardWrapper.appendChild(card);
                     cardContainer.appendChild(cardWrapper);
 
-                    const indexLabel = document.createElement('div');
-                    indexLabel.classList.add('index-label');
+                    const indexLabelWrapper = document.createElement('div');
+                    indexLabelWrapper.classList.add('index-label-wrapper');
+                    const indexLabel = document.createElement('span');
                     indexLabel.textContent = i;
-                    indexLabel.style.width = `${cardWidth}px`;
-                    indexLabelContainer.appendChild(indexLabel);
+                    indexLabelWrapper.style.width = `${cardWidth}px`;
+                    indexLabelWrapper.appendChild(indexLabel);
+                    labelContainer.appendChild(indexLabelWrapper);
                 });
                 cardElements = Array.from(cardContainer.children);
                 attachEventListeners();
@@ -286,15 +282,12 @@
                 const isSelected = selectedCards.includes(cardWrapper);
 
                 if (isSelected) {
-                    // If the card is already selected, unselect it.
                     selectedCards = selectedCards.filter(c => c !== cardWrapper);
                     cardWrapper.classList.remove('selected');
                 } else if (selectedCards.length < 2) {
-                    // If less than 2 cards are selected, add the new one.
                     selectedCards.push(cardWrapper);
                     cardWrapper.classList.add('selected');
                 } else {
-                    // If a third card is selected, clear the old selection and start a new one.
                     clearSelection();
                     selectedCards.push(cardWrapper);
                     cardWrapper.classList.add('selected');
@@ -379,7 +372,6 @@
                 card1.style.visibility = 'hidden';
                 card2.style.visibility = 'hidden';
 
-                // Position clones at the original positions
                 card1Clone.style.position = 'absolute';
                 card2Clone.style.position = 'absolute';
                 card1Clone.style.left = `${card1Rect.left}px`;
@@ -392,7 +384,6 @@
                 document.body.appendChild(card1Clone);
                 document.body.appendChild(card2Clone);
 
-                // Start the swap animation
                 requestAnimationFrame(() => {
                     card1Clone.style.transition = 'transform 0.5s ease-in-out';
                     card2Clone.style.transition = 'transform 0.5s ease-in-out';
@@ -401,7 +392,6 @@
                 });
 
                 setTimeout(() => {
-                    // Update DOM after animation
                     const parent = card1.parentNode;
                     const nextSibling1 = card1.nextSibling;
                     const nextSibling2 = card2.nextSibling;
@@ -416,7 +406,7 @@
 
                     isAnimating = false;
                     clearSelection();
-                }, 500); // Duration of the animation
+                }, 500);
             }
 
             // Clears the selected cards and hides buttons
@@ -433,9 +423,7 @@
             });
             swapBtn.addEventListener('click', handleSwap);
 
-            // Add a click listener to the body to handle clicks outside the cards
             document.body.addEventListener('click', (event) => {
-                // If a click occurs on a card or a control button, don't clear the selection
                 const isClickOnCard = event.target.closest('.card-wrapper');
                 const isClickOnButton = event.target.closest('#controlButtons');
 
@@ -444,7 +432,6 @@
                 }
             });
 
-            // Initial render
             renderCards(5);
         };
     </script>

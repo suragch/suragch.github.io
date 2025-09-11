@@ -25,7 +25,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             gap: 1rem;
             min-height: 250px;
             margin-top: 2rem;
@@ -39,6 +39,11 @@
             position: relative;
             transition: transform 0.3s ease;
             will-change: transform;
+            flex-shrink: 0;
+            user-select: none;
+            /* Fix for rounded corners on transform */
+            border-radius: 12px;
+            overflow: hidden;
         }
 
         .card-wrapper.selected {
@@ -48,8 +53,6 @@
         }
 
         .card {
-            width: 80px;
-            height: 120px;
             background-color: white;
             border: 1px solid #cbd5e0;
             border-radius: 12px;
@@ -62,6 +65,7 @@
             font-weight: 700;
             transition: transform 0.5s ease;
             backface-visibility: hidden;
+            flex-shrink: 0;
         }
 
         .card.red {
@@ -72,15 +76,6 @@
         .card.black {
             color: #1f2937;
             /* gray-800 */
-        }
-
-        .card-value {
-            font-size: 1.5rem;
-        }
-
-        .card-suit {
-            font-size: 2.5rem;
-            line-height: 1;
         }
 
         .hidden-element {
@@ -114,12 +109,28 @@
             cursor: not-allowed;
             box-shadow: none;
         }
+
+        .index-label-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            user-select: none;
+        }
+
+        .index-label {
+            text-align: center;
+            font-weight: 500;
+            color: #475569;
+            /* slate-600 */
+        }
     </style>
 </head>
 
 <body class="bg-slate-100 flex flex-col items-center p-4">
 
-    <div class="bg-white p-6 rounded-xl shadow-xl max-w-4xl w-full">
+    <div class="bg-white p-6 rounded-xl shadow-xl max-w-full w-full sm:max-w-4xl md:max-w-6xl lg:max-w-7xl">
         <h1 class="text-4xl font-bold text-center text-slate-800 mb-6">Interactive Card Sorter</h1>
 
         <div class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-8">
@@ -134,9 +145,6 @@
                     <option value="8">8</option>
                     <option value="9">9</option>
                     <option value="10">10</option>
-                    <option value="11">11</option>
-                    <option value="12">12</option>
-                    <option value="13">13</option>
                 </select>
             </div>
             <button id="newGameBtn"
@@ -147,6 +155,10 @@
 
         <div id="cardContainer" class="card-container">
             <!-- Cards will be dynamically inserted here -->
+        </div>
+
+        <div id="indexLabelContainer" class="index-label-container">
+            <!-- Index labels will be dynamically inserted here -->
         </div>
 
         <div id="messageBox" class="text-center mt-6 text-slate-700 font-medium text-lg">
@@ -164,6 +176,7 @@
     <script>
         window.onload = function () {
             const cardContainer = document.getElementById('cardContainer');
+            const indexLabelContainer = document.getElementById('indexLabelContainer');
             const messageBox = document.getElementById('messageBox');
             const newGameBtn = document.getElementById('newGameBtn');
             const cardCountSelect = document.getElementById('cardCount');
@@ -188,10 +201,11 @@
                 return array;
             }
 
-            // Renders the cards to the DOM
+            // Renders the cards and index labels to the DOM
             function renderCards(count) {
                 removeLabels();
                 cardContainer.innerHTML = '';
+                indexLabelContainer.innerHTML = '';
 
                 let deck = [];
                 for (let i = 0; i < count; i++) {
@@ -207,7 +221,14 @@
 
                 const shuffledDeck = shuffle(deck);
 
-                shuffledDeck.forEach((cardData) => {
+                // Calculate card size for responsive layout
+                const containerWidth = cardContainer.offsetWidth;
+                const gap = 16; // 1rem
+                const totalGap = (count - 1) * gap;
+                const cardWidth = (containerWidth - totalGap) / count;
+                const cardHeight = cardWidth * 1.5;
+
+                shuffledDeck.forEach((cardData, i) => {
                     const cardWrapper = document.createElement('div');
                     cardWrapper.classList.add('card-wrapper');
                     cardWrapper.dataset.numValue = cardData.numValue;
@@ -216,23 +237,35 @@
                     card.classList.add('card', 'flex', 'flex-col', 'items-center', 'justify-between', 'shadow-md', 'border', 'border-slate-300', 'hover:border-blue-500', 'hover:shadow-lg', 'transition-all');
                     card.classList.add(cardData.color);
 
+                    // Apply dynamic sizing
+                    card.style.width = `${cardWidth}px`;
+                    card.style.height = `${cardHeight}px`;
+                    card.style.fontSize = `${cardWidth * 0.25}px`;
+
                     const topCorner = document.createElement('div');
-                    topCorner.classList.add('self-start', 'text-xl');
+                    topCorner.classList.add('self-start');
                     topCorner.textContent = cardData.value;
                     card.appendChild(topCorner);
 
                     const suitSymbol = document.createElement('div');
-                    suitSymbol.classList.add('card-suit', 'text-5xl');
+                    suitSymbol.classList.add('card-suit');
                     suitSymbol.textContent = cardData.suit;
+                    suitSymbol.style.fontSize = `${cardWidth * 0.4}px`;
                     card.appendChild(suitSymbol);
 
                     const bottomCorner = document.createElement('div');
-                    bottomCorner.classList.add('self-end', 'text-xl');
+                    bottomCorner.classList.add('self-end');
                     bottomCorner.textContent = cardData.value;
                     card.appendChild(bottomCorner);
 
                     cardWrapper.appendChild(card);
                     cardContainer.appendChild(cardWrapper);
+
+                    const indexLabel = document.createElement('div');
+                    indexLabel.classList.add('index-label');
+                    indexLabel.textContent = i;
+                    indexLabel.style.width = `${cardWidth}px`;
+                    indexLabelContainer.appendChild(indexLabel);
                 });
                 cardElements = Array.from(cardContainer.children);
                 attachEventListeners();

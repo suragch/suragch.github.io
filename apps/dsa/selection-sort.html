@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selection Sort Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 95%;
+        }
+
+        canvas {
+            border: 2px solid #e5e7eb;
+            /* A slightly lighter border */
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .control-panel {
+            background-color: #f9fafb;
+            /* Lighter panel background */
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+        }
+
+        /* Custom focus rings for better accessibility */
+        button:focus,
+        input[type="range"]:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.4);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main Container -->
+    <div class="container bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+        <h1 class="text-3xl font-extrabold text-center text-gray-800 mb-6">Selection Sort Visualizer</h1>
+
+        <!-- Canvas for Visualization -->
+        <canvas id="sortCanvas" class="w-full h-auto mb-6"></canvas>
+
+        <!-- Control Panel -->
+        <div
+            class="control-panel flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0 sm:space-x-4">
+            <!-- Left Controls -->
+            <div class="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <button id="startBtn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-sm hover:shadow-md w-full sm:w-auto">Start</button>
+                <button id="pauseBtn"
+                    class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-sm hover:shadow-md w-full sm:w-auto">Pause</button>
+                <button id="stepBtn"
+                    class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-sm hover:shadow-md w-full sm:w-auto">Step</button>
+                <button id="resetBtn"
+                    class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 ease-in-out shadow-sm hover:shadow-md w-full sm:w-auto">Reset</button>
+            </div>
+
+            <!-- Right Controls -->
+            <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6 w-full sm:w-auto">
+                <div class="flex flex-col items-center">
+                    <label for="arraySize" class="text-sm font-medium text-gray-700 mb-1">Array Size</label>
+                    <input type="range" id="arraySize" min="10" max="100" value="50" step="5"
+                        class="w-32 accent-indigo-500">
+                    <span id="sizeValue" class="text-xs text-gray-500 mt-1">50</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <label for="sortSpeed" class="text-sm font-medium text-gray-700 mb-1">Animation Speed</label>
+                    <input type="range" id="sortSpeed" min="5" max="200" value="50" class="w-32 accent-indigo-500">
+                    <span id="speedValue" class="text-xs text-gray-500 mt-1">50ms</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('sortCanvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const arraySizeInput = document.getElementById('arraySize');
+        const sortSpeedInput = document.getElementById('sortSpeed');
+        const sizeValueSpan = document.getElementById('sizeValue');
+        const speedValueSpan = document.getElementById('speedValue');
+
+        // State Variables
+        let array = [];
+        let arraySize = parseInt(arraySizeInput.value);
+        let sortSpeed = parseInt(sortSpeedInput.value);
+        let isSorting = false;
+        let isPaused = false;
+        let swapAnimation = null;
+
+        // Selection Sort specific state
+        let sortI = 0; // Outer loop: marks the end of the sorted portion
+        let sortJ = 1; // Inner loop: scans the unsorted portion
+        let minIndex = 0; // Index of the minimum element found in a pass
+
+        // Set up the canvas dimensions on load and resize
+        function setCanvasDimensions() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.width * 0.5; // Maintain aspect ratio
+        }
+        window.addEventListener('resize', () => {
+            setCanvasDimensions();
+            drawArray(); // Redraw array on resize
+        });
+
+
+        // Function to create a new randomized array
+        function resetArray() {
+            isSorting = false;
+            isPaused = false;
+            // Reset selection sort state variables
+            sortI = 0;
+            minIndex = 0;
+            sortJ = 1;
+            array = [];
+            for (let i = 0; i < arraySize; i++) {
+                // Ensure bars are not too small
+                array.push(Math.floor(Math.random() * (canvas.height - 20)) + 20);
+            }
+            drawArray();
+        }
+
+        // Function to draw the array on the canvas
+        function drawArray(checkingIndex = -1) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const barWidth = canvas.width / array.length;
+
+            for (let i = 0; i < array.length; i++) {
+                let color = '#9ca3af'; // Default unsorted color (gray)
+
+                if (isSorting || sortI >= array.length) {
+                    if (i < sortI) {
+                        color = '#4ade80'; // Sorted (Green)
+                    } else if (i === minIndex) {
+                        color = '#facc15'; // Current minimum (Yellow)
+                    } else if (i === checkingIndex) {
+                        color = '#f87171'; // Element being checked (Red)
+                    }
+                }
+                // When sort is finished, make all green
+                if (sortI >= array.length) {
+                    color = '#4ade80';
+                }
+
+
+                ctx.fillStyle = color;
+                ctx.fillRect(i * barWidth, canvas.height - array[i], barWidth - 1, array[i]);
+            }
+        }
+
+        // Function to animate a swap (reusable from your example)
+        function animateSwap(index1, index2) {
+            return new Promise(resolve => {
+                const barWidth = canvas.width / array.length;
+                const startX1 = index1 * barWidth;
+                const startX2 = index2 * barWidth;
+                const distance = startX2 - startX1;
+                const duration = Math.max(200, sortSpeed * 2); // Make swap animation noticeable
+                let startTime = null;
+
+                function step(timestamp) {
+                    if (!startTime) startTime = timestamp;
+                    const elapsed = timestamp - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+
+                    // Redraw the entire array except for the swapping bars
+                    drawArray();
+
+                    const color = '#a78bfa'; // Purple for swapping elements
+
+                    // Animate the two swapping bars
+                    const x1 = startX1 + progress * distance;
+                    const x2 = startX2 - progress * distance;
+
+                    // Draw bar 1 at its new position
+                    ctx.fillStyle = color;
+                    ctx.fillRect(x1, canvas.height - array[index1], barWidth - 1, array[index1]);
+                    // Draw bar 2 at its new position
+                    ctx.fillStyle = color;
+                    ctx.fillRect(x2, canvas.height - array[index2], barWidth - 1, array[index2]);
+
+
+                    if (progress < 1) {
+                        swapAnimation = requestAnimationFrame(step);
+                    } else {
+                        // Actual swap in the array after animation
+                        [array[index1], array[index2]] = [array[index2], array[index1]];
+                        swapAnimation = null;
+                        drawArray();
+                        resolve();
+                    }
+                }
+                swapAnimation = requestAnimationFrame(step);
+            });
+        }
+
+        // The core selection sort logic for one step (for Step button)
+        async function selectionSortStep() {
+            if (isSorting && !isPaused) return; // Can't step while running
+
+            // Start sorting if not already started
+            if (!isSorting) { isSorting = true; }
+            isPaused = true;
+
+            // Check if sorting is complete
+            if (sortI >= array.length - 1) {
+                isSorting = false;
+                drawArray();
+                return;
+            }
+
+            // If inner loop (j) has finished, perform swap and advance outer loop (i)
+            if (sortJ >= array.length) {
+                if (minIndex !== sortI) {
+                    await animateSwap(sortI, minIndex);
+                }
+                sortI++;
+                minIndex = sortI;
+                sortJ = sortI + 1;
+            }
+            // Otherwise, continue scanning with the inner loop
+            else {
+                drawArray(sortJ); // Highlight the bar being checked
+                if (array[sortJ] < array[minIndex]) {
+                    minIndex = sortJ;
+                }
+                sortJ++;
+            }
+        }
+
+
+        // Main animation loop for automatic sorting
+        async function runSelectionSort() {
+            if (!isSorting) {
+                isSorting = true;
+                isPaused = false;
+            }
+
+            while (sortI < array.length - 1 && !isPaused) {
+                minIndex = sortI;
+                for (let j = sortI + 1; j < array.length; j++) {
+                    if (isPaused) return; // Exit if paused
+
+                    drawArray(j);
+                    await new Promise(resolve => setTimeout(resolve, sortSpeed));
+
+                    if (array[j] < array[minIndex]) {
+                        minIndex = j;
+                    }
+                }
+
+                if (isPaused) return; // Check again before swap
+
+                if (minIndex !== sortI) {
+                    await animateSwap(sortI, minIndex);
+                }
+
+                sortI++;
+                sortJ = sortI + 1; // Update global J for step functionality
+            }
+
+            // If not paused, the sort finished
+            if (!isPaused) {
+                isSorting = false;
+                drawArray();
+            }
+        }
+
+        // Event Listeners for controls
+        startBtn.addEventListener('click', () => {
+            if (isPaused) {
+                isPaused = false;
+                runSelectionSort();
+            } else if (!isSorting) {
+                resetArray();
+                runSelectionSort();
+            }
+        });
+
+        pauseBtn.addEventListener('click', () => {
+            isPaused = true;
+            if (swapAnimation) {
+                cancelAnimationFrame(swapAnimation);
+                swapAnimation = null;
+                drawArray(); // Redraw to clear partial animation
+            }
+        });
+
+        stepBtn.addEventListener('click', selectionSortStep);
+
+        resetBtn.addEventListener('click', () => {
+            if (swapAnimation) {
+                cancelAnimationFrame(swapAnimation);
+                swapAnimation = null;
+            }
+            resetArray();
+        });
+
+        arraySizeInput.addEventListener('input', (e) => {
+            arraySize = parseInt(e.target.value);
+            sizeValueSpan.textContent = arraySize;
+            resetArray();
+        });
+
+        sortSpeedInput.addEventListener('input', (e) => {
+            sortSpeed = parseInt(e.target.value);
+            speedValueSpan.textContent = `${sortSpeed}ms`;
+        });
+
+        // Initial setup
+        window.onload = () => {
+            setCanvasDimensions();
+            resetArray();
+        };
+    </script>
+
+</body>
+
+</html>

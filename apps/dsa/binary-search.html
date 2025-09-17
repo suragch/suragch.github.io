@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binary Search Visualizer</title>
+    <!-- Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            /* Prevent scrolling on the body */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 95%;
+        }
+
+        canvas {
+            border: 2px solid #cbd5e1;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .control-panel {
+            background-color: #f1f5f9;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .button {
+            transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 flex items-center justify-center p-4">
+
+    <!-- KEY CHANGE: Added h-full and min-h-0 to make this container fill the page vertically -->
+    <div class="container bg-white rounded-xl shadow-2xl p-6 flex flex-col h-full min-h-0">
+        <h1 class="text-4xl font-extrabold text-center text-gray-900 mb-6 flex-shrink-0">Binary Search Visualizer</h1>
+
+        <!-- KEY CHANGE: Added min-h-0 for flexbox stability, allowing it to shrink properly -->
+        <canvas id="searchCanvas" class="w-full mb-6 flex-grow min-h-0"></canvas>
+
+        <!-- Control Panel -->
+        <div
+            class="control-panel flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0 md:space-x-4 flex-shrink-0">
+            <!-- Left Controls -->
+            <div class="flex flex-wrap items-center justify-center space-x-2 w-full md:w-auto">
+                <button id="startBtn"
+                    class="button bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-full w-full sm:w-auto mb-2 sm:mb-0">Start
+                    Search</button>
+                <button id="stepBtn"
+                    class="button bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-6 rounded-full w-full sm:w-auto mb-2 sm:mb-0">Step</button>
+                <button id="resetBtn"
+                    class="button bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-full w-full sm:w-auto mb-2 sm:mb-0">Reset</button>
+            </div>
+
+            <!-- Right Controls -->
+            <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-8 w-full md:w-auto">
+                <div class="flex flex-col items-center">
+                    <label for="arraySize" class="text-sm font-medium text-gray-700 mb-1">Array Size:</label>
+                    <input type="range" id="arraySize" min="10" max="100" value="50" step="10"
+                        class="w-32 accent-indigo-500">
+                    <span id="sizeValue" class="text-xs text-gray-500 mt-1">50</span>
+                </div>
+                <div class="flex flex-col items-center">
+                    <label for="searchTarget" class="text-sm font-medium text-gray-700 mb-1">Search for:</label>
+                    <input type="number" id="searchTarget" placeholder="Target Value"
+                        class="w-32 px-2 py-1 rounded border-2 border-gray-300 focus:outline-none focus:border-indigo-500 text-center">
+                </div>
+                <div class="flex flex-col items-center">
+                    <label for="searchSpeed" class="text-sm font-medium text-gray-700 mb-1">Search Speed:</label>
+                    <input type="range" id="searchSpeed" min="5" max="2000" value="500" class="w-32 accent-indigo-500">
+                    <span id="speedValue" class="text-xs text-gray-500 mt-1">500ms</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex justify-center mt-4 flex-shrink-0">
+            <p id="statusText" class="text-lg font-semibold text-gray-800">Ready to search.</p>
+        </div>
+    </div>
+
+    <script>
+        // Get all necessary DOM elements
+        const canvas = document.getElementById('searchCanvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const arraySizeInput = document.getElementById('arraySize');
+        const searchTargetInput = document.getElementById('searchTarget');
+        const searchSpeedInput = document.getElementById('searchSpeed');
+        const sizeValueSpan = document.getElementById('sizeValue');
+        const speedValueSpan = document.getElementById('speedValue');
+        const statusText = document.getElementById('statusText');
+
+        // State variables for the visualizer
+        let array = [];
+        let arraySize = parseInt(arraySizeInput.value);
+        let searchSpeed = parseInt(searchSpeedInput.value);
+        let low = 0;
+        let high = 0;
+        let mid = -1;
+        let foundIndex = -1; // Keep track of the found index for resizing
+        let target = null;
+        let isSearching = false;
+        let isAuto = false; // Flag to distinguish between auto and manual search
+        let timeoutId = null;
+        let stepPhase = 0; // 0: show mid, 1: update bounds
+
+        // Canvas dimensions are now set based on its container's size
+        function setCanvasDimensions() {
+            // Match canvas drawing buffer size to its displayed size
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            // Redraw the array with the new dimensions
+            drawArray(low, high, mid, foundIndex);
+        }
+
+        window.addEventListener('resize', setCanvasDimensions);
+
+        // Function to create and sort a new array
+        function resetArray() {
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            isSearching = false;
+            isAuto = false;
+            low = 0;
+            high = arraySize - 1;
+            mid = -1;
+            foundIndex = -1;
+            stepPhase = 0;
+            array = [];
+            // Generate numbers in a fixed range, independent of canvas height.
+            // The drawing function will handle scaling.
+            for (let i = 0; i < arraySize; i++) {
+                array.push(Math.floor(Math.random() * 950) + 50); // Values between 50 and 1000
+            }
+            array.sort((a, b) => a - b);
+
+            target = array[Math.floor(Math.random() * arraySize)];
+            searchTargetInput.value = target;
+
+            statusText.textContent = `Ready to search for ${target}.`;
+            drawArray();
+        }
+
+        // The drawing function now scales bars to fit any canvas height.
+        function drawArray(lowIndex = -1, highIndex = -1, midIndex = -1, fIndex = -1) {
+            if (canvas.height === 0) return; // Don't draw if canvas isn't visible yet
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const barWidth = canvas.width / array.length;
+            const barSpacing = 2;
+            const fontSize = 12;
+
+            // Define margins inside the canvas
+            const topMargin = 30;
+            const bottomMargin = 25;
+            const drawableHeight = canvas.height - topMargin - bottomMargin;
+
+            // Prevent drawing if canvas is too small
+            if (drawableHeight <= 0) return;
+
+            const maxValue = array.length > 0 ? Math.max(...array) : 1;
+
+            for (let i = 0; i < array.length; i++) {
+                let color = '#a0aec0'; // Default light grey color
+
+                if (i >= lowIndex && i <= highIndex) color = '#6495ED'; // Search window
+                if (i === lowIndex) color = '#ff6b6b'; // Low pointer
+                if (i === highIndex) color = '#ff6b6b'; // High pointer
+                if (i === midIndex) color = '#ffb347'; // Mid pointer
+                if (i === fIndex) color = '#45b84c'; // Found
+
+                // Calculate scaled bar height
+                const barHeight = Math.max((array[i] / maxValue) * drawableHeight, 2); // Ensure bar is at least 2px high
+
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                    i * barWidth,
+                    canvas.height - barHeight - bottomMargin,
+                    barWidth - barSpacing,
+                    barHeight
+                );
+
+                // Only draw text if bars are tall enough
+                if (drawableHeight > 40) {
+                    // Draw the value on top of the bar
+                    ctx.fillStyle = '#333';
+                    ctx.textAlign = 'center';
+                    ctx.font = `${fontSize}px Inter, sans-serif`;
+                    ctx.fillText(
+                        array[i],
+                        i * barWidth + barWidth / 2,
+                        canvas.height - barHeight - bottomMargin - 5
+                    );
+
+                    // Draw the index below the bar
+                    ctx.fillStyle = '#666';
+                    ctx.fillText(i, i * barWidth + barWidth / 2, canvas.height - 10);
+                }
+            }
+        }
+
+        function runAutoSearchStep() {
+            if (!isSearching) return;
+
+            if (low > high) {
+                statusText.textContent = `Target ${target} not found!`;
+                isSearching = false;
+                foundIndex = -1;
+                drawArray(-1, -1, -1, foundIndex);
+                return;
+            }
+
+            mid = Math.floor((low + high) / 2);
+            drawArray(low, high, mid, foundIndex);
+
+            if (array[mid] === target) {
+                statusText.textContent = `Found target ${target} at index ${mid}!`;
+                isSearching = false;
+                foundIndex = mid; // Set found index state
+                drawArray(low, high, mid, foundIndex);
+                return;
+            } else if (array[mid] < target) {
+                low = mid + 1;
+                statusText.textContent = `Looking in the right half.`;
+            } else {
+                high = mid - 1;
+                statusText.textContent = `Looking in the left half.`;
+            }
+
+            if (isSearching && isAuto) {
+                timeoutId = setTimeout(runAutoSearchStep, searchSpeed);
+            }
+        }
+
+        function runManualSearchStep() {
+            if (!isSearching) {
+                // This block now executes as the entire FIRST step.
+                target = parseInt(searchTargetInput.value);
+                if (isNaN(target)) {
+                    statusText.textContent = 'Please enter a valid number.';
+                    return;
+                }
+                isSearching = true;
+                low = 0;
+                high = array.length - 1;
+                mid = -1;
+                foundIndex = -1;
+                stepPhase = 0; // The next step will be to show the guess.
+
+                // Update UI for the initial state.
+                statusText.textContent = `Starting search. Range is from index ${low} to ${high}.`;
+                drawArray(low, high, -1, foundIndex); // Draw with only low and high highlighted.
+
+                // Return immediately, waiting for the next click to perform the first guess.
+                return;
+            }
+
+            if (low > high) {
+                statusText.textContent = `Target ${target} not found!`;
+                isSearching = false;
+                foundIndex = -1;
+                drawArray(-1, -1, -1, foundIndex);
+                return;
+            }
+
+            switch (stepPhase) {
+                case 0: // Step to show the guess (mid)
+                    mid = Math.floor((low + high) / 2);
+                    drawArray(low, high, mid, foundIndex);
+                    statusText.textContent = `Checking guess at index ${mid} (value: ${array[mid]}).`;
+                    stepPhase = 1; // Set up the next step to evaluate the guess.
+                    break;
+                case 1: // Step to evaluate the guess and update bounds
+                    if (array[mid] === target) {
+                        statusText.textContent = `Found target ${target} at index ${mid}!`;
+                        isSearching = false;
+                        foundIndex = mid;
+                        drawArray(low, high, mid, foundIndex);
+                        stepPhase = 0; // Reset for a new search
+                        return;
+                    } else if (array[mid] < target) {
+                        low = mid + 1;
+                        statusText.textContent = `Value is too low. New range is from index ${low} to ${high}.`;
+                    } else {
+                        high = mid - 1;
+                        statusText.textContent = `Value is too high. New range is from index ${low} to ${high}.`;
+                    }
+                    drawArray(low, high, -1, foundIndex); // Draw with new bounds, but no mid-guess.
+                    stepPhase = 0; // Set up the next step to show the new guess.
+                    break;
+            }
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            if (!isSearching) {
+                target = parseInt(searchTargetInput.value);
+                if (isNaN(target)) {
+                    statusText.textContent = 'Please enter a valid number.';
+                    return;
+                }
+                isSearching = true;
+                low = 0;
+                high = array.length - 1;
+                mid = -1;
+                foundIndex = -1;
+                statusText.textContent = `Searching for ${target}...`;
+            }
+            isAuto = true;
+            runAutoSearchStep();
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            isAuto = false;
+            runManualSearchStep();
+        });
+
+        resetBtn.addEventListener('click', () => {
+            resetArray();
+        });
+
+        arraySizeInput.addEventListener('input', (e) => {
+            arraySize = parseInt(e.target.value);
+            sizeValueSpan.textContent = arraySize;
+            resetArray();
+        });
+
+        searchSpeedInput.addEventListener('input', (e) => {
+            searchSpeed = parseInt(e.target.value);
+            speedValueSpan.textContent = `${searchSpeed}ms`;
+        });
+
+        window.onload = function () {
+            // First, set the canvas dimensions based on the initial layout
+            setCanvasDimensions();
+            // Then, create the array and draw it for the first time
+            resetArray();
+        };
+    </script>
+
+</body>
+
+</html>

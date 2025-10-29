@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pascal's Triangle Generator</title>
+    <!-- Load Tailwind CSS from CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the triangle numbers */
+        #triangle-container .triangle-row {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+
+        #triangle-container .triangle-num {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            background-color: #e5e7eb;
+            /* bg-gray-200 */
+            border-radius: 9999px;
+            /* rounded-full */
+            font-size: 0.875rem;
+            /* text-sm */
+            font-weight: 500;
+            /* font-medium */
+            color: #374151;
+            /* text-gray-700 */
+            margin: 0 4px;
+            flex-shrink: 0;
+            /* Prevent shrinking */
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            /* shadow-sm */
+        }
+
+        /* Adjust spacing and size for very small screens */
+        @media (max-width: 640px) {
+            #triangle-container .triangle-num {
+                width: 32px;
+                height: 32px;
+                font-size: 0.75rem;
+                /* text-xs */
+                margin: 0 2px;
+            }
+
+            #triangle-container .triangle-row {
+                margin-bottom: 4px;
+            }
+        }
+    </style>
+    <script>
+        // Apply custom font configuration
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Main Application Card - Removed max-w-4xl to allow for full width -->
+    <div class="bg-white p-6 sm:p-8 rounded-xl shadow-2xl w-full">
+        <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">
+            Pascal's Triangle Generator
+        </h1>
+
+        <!-- Input Section -->
+        <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mb-8">
+            <label for="rowsInput" class="text-lg text-gray-600 font-medium">Enter number of rows (x):</label>
+            <input type="number" id="rowsInput"
+                class="border-2 border-gray-300 rounded-lg shadow-sm p-2 w-36 text-center text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                min="1" max="30" value="5">
+            <button id="generateBtn"
+                class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg shadow-lg hover:bg-blue-700 active:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all transform hover:scale-105">
+                Generate
+            </button>
+        </div>
+
+        <!-- Triangle Display Area -->
+        <div id="triangle-wrapper" class="w-full overflow-x-auto pb-4">
+            <div id="triangle-container" class="text-center">
+                <!-- Pascal's Triangle will be generated here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Message Box (hidden by default) -->
+    <div id="messageBox" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+            <h3 id="messageTitle" class="text-lg font-bold text-gray-800 mb-4">Message</h3>
+            <p id="messageText" class="text-gray-600 mb-6"></p>
+            <button id="messageCloseBtn"
+                class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg w-full hover:bg-blue-700 transition">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center text-gray-500 mt-6 text-sm">
+        A simple Pascal's Triangle visualizer.
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const rowsInput = document.getElementById('rowsInput');
+            const generateBtn = document.getElementById('generateBtn');
+            const triangleContainer = document.getElementById('triangle-container');
+
+            // Message Box Elements
+            const messageBox = document.getElementById('messageBox');
+            const messageText = document.getElementById('messageText');
+            const messageTitle = document.getElementById('messageTitle');
+            const messageCloseBtn = document.getElementById('messageCloseBtn');
+
+            // --- Message Box Logic ---
+            function showMessage(title, message) {
+                messageTitle.textContent = title;
+                messageText.textContent = message;
+                messageBox.classList.remove('hidden');
+            }
+
+            function hideMessage() {
+                messageBox.classList.add('hidden');
+            }
+
+            messageCloseBtn.addEventListener('click', hideMessage);
+            messageBox.addEventListener('click', (e) => {
+                // Close if clicking on the background overlay
+                if (e.target === messageBox) {
+                    hideMessage();
+                }
+            });
+
+            // --- Pascal's Triangle Logic ---
+
+            /**
+             * Generates the data for Pascal's Triangle.
+             * @param {number} numRows - The number of rows to generate.
+             * @returns {number[][]} A 2D array representing the triangle.
+             */
+            function generatePascalTriangle(numRows) {
+                if (numRows <= 0) {
+                    return [];
+                }
+
+                const triangle = [];
+
+                for (let i = 0; i < numRows; i++) {
+                    const row = [];
+                    row[0] = 1; // First element is always 1
+
+                    for (let j = 1; j < i; j++) {
+                        // Calculate middle elements based on the previous row
+                        row[j] = triangle[i - 1][j - 1] + triangle[i - 1][j];
+                    }
+
+                    if (i > 0) {
+                        row[i] = 1; // Last element is always 1
+                    }
+
+                    triangle.push(row);
+                }
+
+                return triangle;
+            }
+
+            /**
+             * Renders the Pascal's Triangle data into the DOM.
+             * @param {number[][]} triangle - The 2D array from generatePascalTriangle.
+             */
+            function displayTriangle(triangle) {
+                // Clear any existing triangle
+                triangleContainer.innerHTML = '';
+
+                // Create and append row elements
+                triangle.forEach(row => {
+                    const rowEl = document.createElement('div');
+                    rowEl.className = 'triangle-row';
+
+                    // Create and append number elements
+                    row.forEach(num => {
+                        const numEl = document.createElement('div');
+                        numEl.className = 'triangle-num';
+                        numEl.textContent = num;
+
+                        // --- Add logic to shrink font for large numbers ---
+                        const numString = num.toString();
+                        if (numString.length > 6) {
+                            // For 7+ digits (e.g., 17167984)
+                            // Use a very small font and adjusted line-height
+                            numEl.style.fontSize = '0.5rem'; // 8px
+                            numEl.style.lineHeight = '1.2';
+                        } else if (numString.length > 4) {
+                            // For 5-6 digits (e.g., 12870)
+                            numEl.style.fontSize = '0.625rem'; // 10px
+                        } else if (numString.length > 3) {
+                            // For 4 digits (e.g., 1770)
+                            numEl.style.fontSize = '0.75rem'; // 12px
+                        }
+                        // For 1-3 digits, the default CSS classes will apply
+                        // (0.875rem on desktop, 0.75rem on mobile)
+
+                        rowEl.appendChild(numEl);
+                    });
+
+                    triangleContainer.appendChild(rowEl);
+                });
+            }
+
+            /**
+             * Handles the generate button click event.
+             */
+            function handleGeneration() {
+                const numRows = parseInt(rowsInput.value, 10);
+
+                // --- Input Validation ---
+                if (isNaN(numRows) || numRows < 1) {
+                    showMessage('Invalid Input', 'Please enter a positive number (e.g., 1, 2, 3...).');
+                    return;
+                }
+
+                if (numRows > 30) {
+                    showMessage('Input Too Large', 'Please enter a number 30 or less to ensure it displays correctly on your screen.');
+                    rowsInput.value = 30; // Reset to max
+                    return;
+                }
+
+                // --- Generation and Display ---
+                try {
+                    const triangleData = generatePascalTriangle(numRows);
+                    displayTriangle(triangleData);
+                } catch (error) {
+                    console.error('Error generating triangle:', error);
+                    showMessage('Error', 'An unexpected error occurred while generating the triangle.');
+                }
+            }
+
+            // --- Event Listeners ---
+            generateBtn.addEventListener('click', handleGeneration);
+
+            // Allow pressing 'Enter' in the input field
+            rowsInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleGeneration();
+                }
+            });
+
+            // --- Initial Generation ---
+            // Generate the default triangle (value="5") on page load
+            handleGeneration();
+        });
+    </script>
+
+</body>
+
+</html>

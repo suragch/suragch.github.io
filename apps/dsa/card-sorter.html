@@ -125,6 +125,7 @@
     <div class="bg-white p-6 rounded-xl shadow-xl max-w-full w-full sm:max-w-4xl md:max-w-6xl lg:max-w-7xl">
         <h1 class="text-4xl font-bold text-center text-slate-800 mb-6">Interactive Card Sorter</h1>
 
+        <!-- Control Row: Card Count, Shuffle, and Sort buttons -->
         <div class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-8">
             <div class="flex items-center space-x-2">
                 <label for="cardCount" class="text-slate-600 font-medium">Number of Cards:</label>
@@ -143,6 +144,11 @@
                 class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors">
                 Shuffle
             </button>
+            <!-- Sort Button moved here and renamed -->
+            <button id="sortInstantlyBtn"
+                class="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors">
+                Sort
+            </button>
         </div>
 
         <div id="cardContainer" class="card-row">
@@ -157,6 +163,7 @@
             Click on a card to select it.
         </div>
 
+        <!-- Action Row: Swap button -->
         <div id="controlButtons" class="flex justify-center space-x-4 mt-6">
             <button id="swapBtn" disabled
                 class="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
@@ -173,6 +180,7 @@
             const newGameBtn = document.getElementById('newGameBtn');
             const cardCountSelect = document.getElementById('cardCount');
             const swapBtn = document.getElementById('swapBtn');
+            const sortInstantlyBtn = document.getElementById('sortInstantlyBtn'); // Note: ID kept for JS function clarity
             const cardValues = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
             const suits = [
                 { symbol: '♠', color: 'black' },
@@ -198,6 +206,7 @@
                 removeLabels();
                 cardContainer.innerHTML = '';
                 labelContainer.innerHTML = '';
+                clearSelection(false); // Clear selection state without updating UI yet
 
                 let deck = [];
                 for (let i = 0; i < count; i++) {
@@ -216,15 +225,17 @@
                 // Calculate card size for responsive layout
                 const containerWidth = cardContainer.offsetWidth;
                 const gap = 16; // 1rem
-                const totalGap = (count - 1) * gap;
+                const countSafe = Math.max(1, count);
+                const totalGap = (countSafe - 1) * gap;
                 const maxCardWidth = 150;
-                const calculatedCardWidth = (containerWidth - totalGap) / count;
+                const calculatedCardWidth = (containerWidth - totalGap) / countSafe;
                 const cardWidth = Math.min(calculatedCardWidth, maxCardWidth);
                 const cardHeight = cardWidth * 1.5;
 
                 shuffledDeck.forEach((cardData, i) => {
                     const cardWrapper = document.createElement('div');
                     cardWrapper.classList.add('card-wrapper');
+                    // Store the numerical value for sorting (Ace=0, 2=1, ..., 10=9)
                     cardWrapper.dataset.numValue = cardData.numValue;
 
                     const card = document.createElement('div');
@@ -265,10 +276,15 @@
                 });
                 cardElements = Array.from(cardContainer.children);
                 attachEventListeners();
+                updateUI(); // Ensure UI is updated after rendering
             }
 
             // Attaches click listeners to each card
             function attachEventListeners() {
+                // Remove previous listeners to avoid duplicates
+                cardElements.forEach(card => card.removeEventListener('click', handleCardClick));
+
+                cardElements = Array.from(cardContainer.children);
                 cardElements.forEach(card => {
                     card.addEventListener('click', handleCardClick);
                 });
@@ -288,6 +304,7 @@
                     selectedCards.push(cardWrapper);
                     cardWrapper.classList.add('selected');
                 } else {
+                    // If 2 are selected, clear and select the new one
                     clearSelection();
                     selectedCards.push(cardWrapper);
                     cardWrapper.classList.add('selected');
@@ -362,6 +379,7 @@
                 const card1Rect = card1.getBoundingClientRect();
                 const card2Rect = card2.getBoundingClientRect();
 
+                // Clone the cards for animation and hide the originals
                 const card1Clone = card1.cloneNode(true);
                 const card2Clone = card2.cloneNode(true);
                 card1Clone.classList.remove('selected');
@@ -372,6 +390,7 @@
                 card1.style.visibility = 'hidden';
                 card2.style.visibility = 'hidden';
 
+                // Position clones at their current location
                 card1Clone.style.position = 'absolute';
                 card2Clone.style.position = 'absolute';
                 card1Clone.style.left = `${card1Rect.left}px`;
@@ -384,6 +403,7 @@
                 document.body.appendChild(card1Clone);
                 document.body.appendChild(card2Clone);
 
+                // Start animation
                 requestAnimationFrame(() => {
                     card1Clone.style.transition = 'transform 0.5s ease-in-out';
                     card2Clone.style.transition = 'transform 0.5s ease-in-out';
@@ -391,6 +411,7 @@
                     card2Clone.style.transform = `translate(${card1Rect.left - card2Rect.left}px, ${card1Rect.top - card2Rect.top}px)`;
                 });
 
+                // Re-order the DOM elements after animation completes
                 setTimeout(() => {
                     const parent = card1.parentNode;
                     const nextSibling1 = card1.nextSibling;
@@ -409,11 +430,44 @@
                 }, 500);
             }
 
+            // Function to handle instant sorting
+            function handleInstantSort() {
+                if (isAnimating) return;
+
+                // 1. Clear selection first
+                clearSelection(false); // Clear selection visually and logically
+
+                // 2. Get the current card elements
+                const cardElementsArray = Array.from(cardContainer.children);
+
+                // 3. Sort the elements based on their data-num-value
+                cardElementsArray.sort((a, b) => {
+                    const valA = parseInt(a.dataset.numValue, 10);
+                    const valB = parseInt(b.dataset.numValue, 10);
+                    return valA - valB; // Ascending order
+                });
+
+                // 4. Re-append the elements in the new, sorted order
+                // This efficiently updates the DOM to the new order
+                cardElementsArray.forEach(card => {
+                    cardContainer.appendChild(card);
+                });
+
+                // 5. Re-attach listeners as card order changed (though not strictly necessary for this method, good practice)
+                attachEventListeners();
+
+                // 6. Update status
+                messageBox.textContent = 'Cards are now sorted!';
+                updateUI(); // Final UI update
+            }
+
             // Clears the selected cards and hides buttons
-            function clearSelection() {
+            function clearSelection(shouldUpdateUI = true) {
                 selectedCards.forEach(card => card.classList.remove('selected'));
                 selectedCards = [];
-                updateUI();
+                if (shouldUpdateUI) {
+                    updateUI();
+                }
             }
 
             // Event listeners for buttons
@@ -421,17 +475,30 @@
                 clearSelection();
                 renderCards(parseInt(cardCountSelect.value, 10));
             });
+
+            // Update cards immediately when the count changes
+            cardCountSelect.addEventListener('change', () => {
+                clearSelection();
+                renderCards(parseInt(cardCountSelect.value, 10));
+            });
+
             swapBtn.addEventListener('click', handleSwap);
 
+            // Listener for the Sort button
+            sortInstantlyBtn.addEventListener('click', handleInstantSort);
+
+            // Click listener on body to deselect cards
             document.body.addEventListener('click', (event) => {
                 const isClickOnCard = event.target.closest('.card-wrapper');
-                const isClickOnButton = event.target.closest('#controlButtons');
+                const isClickOnButton = event.target.closest('#controlButtons, #sortInstantlyBtn, #newGameBtn');
+                const isClickOnSelect = event.target.closest('#cardCount');
 
-                if (!isClickOnCard && !isClickOnButton && selectedCards.length === 2) {
+                if (!isClickOnCard && !isClickOnButton && !isClickOnSelect && selectedCards.length > 0) {
                     clearSelection();
                 }
             });
 
+            // Initial render
             renderCards(5);
         };
     </script>
